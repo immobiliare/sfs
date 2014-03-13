@@ -1,0 +1,20 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: SFS
+Upstream-Contact: opensource@immobiliare.it
+Source: https://github.com/immobiliare/sfs
+
+Files: *
+Copyright: 2014, Immobiliare.it S.p.A.
+License: GPL-3+
+
+Files: inih/*
+Copyright: 2009, Brush Technology
+License: BSD-3-clause
+
+Files: debian/*
+Copyright: 2014, Immobiliare.it S.p.A.
+License: permissive
+ Copying and distribution of this package, with or without
+ modification, are permitted in any medium without royalty
+ provided the copyright notice and this notice are
+ preserved.

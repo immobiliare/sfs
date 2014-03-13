@@ -1,0 +1,16 @@
+Source: sfs-fuse
+Section: admin
+Priority: optional
+Maintainer: Luca Bruno <luca.bruno@immobiliare.it>
+Build-Depends: debhelper (>= 7.0.50~),
+               libfuse-dev (>= 2.8.4),
+               libc6-dev,
+               pkg-config
+Standards-Version: 3.8.4
+Homepage: https://github.com/immobiliare/sfs
+
+Package: sfs-fuse
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: sfs fuse component
+ sfs fuse component for syncing files using rsync + fuse
