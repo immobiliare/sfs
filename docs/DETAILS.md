@@ -143,7 +143,7 @@ A more complete example is shown below. A remote node writes a file, then SFS cr
 Command templates
 ----------
 
-The [config.php.sample](php-sync/config.php.sample) should be quite explicative on the meaning of each configuration option.
+The [config.php.sample](/php-sync/config.php.sample) should be quite explicative on the meaning of each configuration option.
 
 Some strings are substituted to the commands `SYNC_DATA_NOREC` and `SYNC_DATA_REC`:
 - **%b** is the batch file. In case of a bulk, it is `-` and the program is supposed to receive a list of files from stdin
