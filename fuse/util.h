@@ -27,11 +27,12 @@
 
 void sfs_fullpath (char fpath[PATH_MAX], const char *path);
 int sfs_sync_path (const char *path, int data_only);
-time_t sfs_get_monotonic_time (SfsState* state);
+void sfs_get_monotonic_time (SfsState* state, struct timespec *ts);
 int sfs_begin_access (void);
 void sfs_end_access (void);
 int sfs_is_directory (const char* path);
 int sfs_update_mtime (const char* domain, const char* path);
-int sfs_fallback_timer_start (SfsState* state);
+
+int sfs_timespec_subtract (struct timespec *result, struct timespec *x, struct timespec *y);
 
 #endif

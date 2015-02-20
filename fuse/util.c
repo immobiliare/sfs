@@ -72,14 +72,23 @@ int sfs_sync_path (const char *path, int data_only) {
     return 1;
 }
 
-time_t sfs_get_monotonic_time (SfsState* state) {
-	time_t curtime = time (NULL);
-	if (curtime < state->last_time) {
-		return state->last_time;
+void sfs_get_monotonic_time (SfsState* state, struct timespec *ret) {
+	// CLOCK_MONOTONIC has a weird behavior with old kernels, also support kernel < 2.6.32
+	if (clock_gettime(CLOCK_REALTIME, ret) < 0) {
+		syslog (LOG_ERR, "[monotonic_time] cannot clock_gettime(): %s", strerror (errno));
+		*ret = state->last_time;
+		return;
 	}
 
-	state->last_time = curtime;
-	return curtime;
+	struct timespec dummy;
+	if (sfs_timespec_subtract (&dummy, ret, &(state->last_time)) < 0) {
+		// don't go back in time
+		*ret = state->last_time;
+		return;
+	}
+	
+	state->last_time = *ret;
+	return;
 }
 
 int sfs_begin_access (void) {
@@ -189,3 +198,27 @@ int sfs_update_mtime (const char* domain, const char* path) {
 
 	return 1;
 }
+
+// http://www.gnu.org/software/libc/manual/html_node/Elapsed-Time.html
+int sfs_timespec_subtract (struct timespec *result, struct timespec *x, struct timespec *y) {
+	/* Perform the carry for the later subtraction by updating y. */
+	if (x->tv_nsec < y->tv_nsec) {
+		long dsec = (y->tv_nsec - x->tv_nsec) / 1000000000 + 1;
+		y->tv_nsec -= 1000000000 * dsec;
+		y->tv_sec += dsec;
+	}
+	if (x->tv_nsec - y->tv_nsec > 1000000000) {
+		long nsec = (x->tv_nsec - y->tv_nsec) / 1000000000;
+		y->tv_nsec += 1000000000 * nsec;
+		y->tv_sec -= nsec;
+	}
+	
+	/* Compute the time remaining to wait.
+	tv_nsec is certainly positive. */
+	result->tv_sec = x->tv_sec - y->tv_sec;
+	result->tv_nsec = x->tv_nsec - y->tv_nsec;
+	
+	/* Return 1 if result is negative. */
+	return x->tv_sec < y->tv_sec;
+}
+

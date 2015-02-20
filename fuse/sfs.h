@@ -47,7 +47,7 @@ typedef struct {
     char* rootdir;
 	int rootdir_len;
 	char* configpath;
-	time_t last_time;
+	struct timespec last_time;
 	pid_t pid;
 	pthread_mutex_t access_mutex;
 	int perm_checks;
@@ -66,7 +66,7 @@ typedef struct {
 	SfsSet* batch_file_set;
 	
 	// preserve accross multiple batch creations
-	time_t batch_time;
+	struct timespec batch_time;
 	int batch_subid;
 	
 	// config
@@ -76,7 +76,7 @@ typedef struct {
 	char* batch_tmp_dir;
 	char* node_name;
 	char* ignore_path_prefix;
-	int batch_flush_seconds;
+	struct timespec batch_flush_ts;
 	int batch_max_events;
 	uint64_t batch_max_bytes;
 	int use_osync;

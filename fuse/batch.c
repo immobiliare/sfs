@@ -43,14 +43,25 @@ static void* batch_timer_handler (void* arg) {
 	SfsState* state = (SfsState*) arg;
 	
 	while (1) {
-		int flush_seconds = state->batch_flush_seconds;
-		if (flush_seconds > 0) {
-			sleep (flush_seconds);
+		struct timespec flush_ts = state->batch_flush_ts;
+
+		struct timespec sleep_ts = flush_ts;
+		while (sleep_ts.tv_sec > 0 || sleep_ts.tv_nsec > 0) {
+			struct timespec rem_ts;
+			if (nanosleep (&sleep_ts, &rem_ts) < 0 && errno == EINTR) {
+				sleep_ts = rem_ts;
+			} else {
+				break;
+			}
 		}
 		
 		pthread_mutex_lock (&(state->batch_mutex));
-		time_t curtime = sfs_get_monotonic_time (state);
-		if ((curtime - state->batch_time) > flush_seconds) {
+		struct timespec curtime, difftime, dummy;
+		sfs_get_monotonic_time (state, &curtime);
+		// curtime - batch_time
+		sfs_timespec_subtract (&difftime, &curtime, &(state->batch_time));
+		if (sfs_timespec_subtract (&dummy, &flush_ts, &difftime)) {
+			// diff time > flush time
 			batch_flush (state);
 		}
 		pthread_mutex_unlock (&(state->batch_mutex));
@@ -145,10 +156,11 @@ void batch_event (const char* line, int len, const char* type) {
 	state->batch_type = type;
 	
 	if (state->batch_tmp_file < 0) {
-		time_t curtime = sfs_get_monotonic_time (state);
+		struct timespec curtime;
+		sfs_get_monotonic_time (state, &curtime);
 		
 		int subid = state->batch_subid;
-		if (curtime == state->batch_time) {
+		if (curtime.tv_sec == state->batch_time.tv_sec) {
 			// same second, increment subid
 			subid++;
 		} else {
@@ -158,7 +170,7 @@ void batch_event (const char* line, int len, const char* type) {
 		const char* node_name = state->node_name;
 		const char* batch_tmp_dir = state->batch_tmp_dir;
 
-		if (asprintf(&(state->batch_name), "%ld_%s_%s_%d_%05d_%s.batch", curtime, node_name, state->hostname, state->pid, subid, type) < 0) {
+		if (asprintf(&(state->batch_name), "%ld_%s_%s_%d_%05d_%s.batch", curtime.tv_sec, node_name, state->hostname, state->pid, subid, type) < 0) {
 			syslog(LOG_CRIT, "[batch_event] batchname asprintf failed for event %s: %s", line, strerror (errno));
 			goto error;
 		}

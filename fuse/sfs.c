@@ -1111,7 +1111,7 @@ int main(int argc, char **argv) {
 	}
 	
 	// startup values
-	state->last_time = time (NULL);
+	sfs_get_monotonic_time (state, &(state->last_time));
 	
 	if (pthread_mutex_init (&(state->batch_mutex), NULL) != 0) {
 		syslog(LOG_CRIT, "[main] cannot init batch mutex: %s", strerror (errno));

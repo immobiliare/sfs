@@ -133,8 +133,10 @@ static int ini_handler (void* userdata, const char* section, const char* name,
 		if (value[0] != '\0') {
 			state->ignore_path_prefix = strndup (value, PATH_MAX);
 		}
-	} else if (MATCH("sfs", "batch_flush_seconds")) {
-		state->batch_flush_seconds = atoi (value);
+	} else if (MATCH("sfs", "batch_flush_msec")) {
+		long long msec = atoll(value);
+		state->batch_flush_ts.tv_sec = msec/1000;
+		state->batch_flush_ts.tv_nsec = (msec%1000) * 1000000;
 	} else if (MATCH("sfs", "batch_max_events")) {
 		state->batch_max_events = atoi (value);
 	} else if (MATCH("sfs", "batch_max_bytes")) {
@@ -175,8 +177,8 @@ static int config_check (SfsState* state) {
 		syslog(LOG_ERR, "[config] sfs/node_name must be specified");
 		goto error;
 	}
-	if (state->batch_flush_seconds <= 0) {
-		syslog(LOG_ERR, "[config] sfs/batch_flush_seconds must be > 0");
+	if (state->batch_flush_ts.tv_sec <= 0 && state->batch_flush_ts.tv_nsec <= 0) {
+		syslog(LOG_ERR, "[config] sfs/batch_flush_msec must be > 0");
 		goto error;
 	}
 	if (state->batch_max_events <= 0) {
@@ -267,7 +269,7 @@ int sfs_config_reload (void) {
 	NSET(batch_dir);
 	NSET(batch_tmp_dir);
 	NSET(node_name);
-	NSET(batch_flush_seconds);
+	NSET(batch_flush_ts);
 	NSET(batch_max_events);
 	NSET(batch_max_bytes);
 	NSET(ignore_path_prefix);
