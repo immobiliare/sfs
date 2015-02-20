@@ -183,17 +183,9 @@ class Sync {
 	}
 	
 	/* push and pull procs */
-	public function doSleep ($res) {
-		if (((string)$res) == "nosleep") {
-			return TRUE;
-		}
-		if (!$res) {
-			sleep($this->config["FAILTIME"]);
-			return FALSE;
-		} else {
-			sleep($this->config["SCANTIME"]);
-			return TRUE;
-		}
+	public function doSleep ($time) {
+		$usec = (int)($time*1000000);
+		usleep($usec);
 	}
 	
 	/* main process */
@@ -259,7 +251,7 @@ class Sync {
 		while (TRUE) {
 			$this->reloadConfig ("sched");
 			if (!$this->checkFile ()) {
-				sleep ($this->config["FAILTIME"]);
+				$this->doSleep($this->config["FAILTIME"]);
 				continue;
 			}
 
@@ -286,7 +278,7 @@ class Sync {
 			}
 
 			if ($sleep) {
-				sleep ($sleep);
+				$this->doSleep($sleep);
 			}
 		}
 	}
@@ -402,19 +394,19 @@ class Sync {
 		while (TRUE) {
 			$this->reloadConfig ("batchq");
 			if (!$this->checkFile ()) {
-				sleep ($this->config["FAILTIME"]);
+				$this->doSleep($this->config["FAILTIME"]);
 				continue;
 			}
 			
 			try {
 				if (!$this->linkLocalBatches () || !$this->pullRemoteBatches ()) {
-					sleep($this->config["FAILTIME"]);
+					$this->doSleep($this->config["FAILTIME"]);
 				} else {
-					sleep($this->config["SCANTIME"]);
+					$this->doSleep($this->config["SCANTIME"]);
 				}
 			} catch (Exception $e) {
 				syslog(LOG_CRIT, "Enqueue loop: ".print_r($e, TRUE));
-				sleep($this->config["FAILTIME"]);
+				$this->doSleep($this->config["FAILTIME"]);
 			}
 		}
 	}
@@ -449,7 +441,7 @@ class Sync {
 				@mkdir ($nodedir, 0777, TRUE);
 				while (!file_exists ("$nodedir/$batch") && !link ("$dir/$batch", "$nodedir/$batch")) {
 					syslog(LOG_ALERT, "Error creating link from $dir/$batch to $nodedir/$batch, cannot continue safely");
-					sleep ($this->config["FAILTIME"]);
+					$this->doSleep($this->config["FAILTIME"]);
 					$this->reloadConfig ("batchq");
 				}
 
@@ -457,13 +449,13 @@ class Sync {
 					$bakdir = $this->config["BACKUPBATCHES"]."/".strftime("%F")."/push/$node/";
 					while (!is_dir ($bakdir) && !mkdir ($bakdir, 0777, TRUE)) {
 						syslog(LOG_ALERT, "Error creating backup directory $bakdir, cannot continue safely");
-						sleep ($this->config["FAILTIME"]);
+						$this->doSleep($this->config["FAILTIME"]);
 						$this->reloadConfig ("batchq");
 					}
 					
 					while (!file_exists ("$bakdir/$batch") && !link ("$dir/$batch", "$bakdir/$batch")) {
 						syslog(LOG_ALERT, "Error creating link from $dir/$batch to $bakdir/$batch, cannot continue safely");
-						sleep ($this->config["FAILTIME"]);
+						$this->doSleep($this->config["FAILTIME"]);
 						$this->reloadConfig ("batchq");
 					}
 				}
@@ -523,7 +515,7 @@ class Sync {
 				unset($errorcode);
 				if (!msg_receive ($this->queue, $this->MSG_PULL, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
 					syslog(LOG_CRIT, "[pull] Cannot pop from queue, putting worker in sleep: ".posix_strerror($errorcode));
-					sleep($this->config["FAILTIME"]);
+					$this->doSleep($this->config["FAILTIME"]);
 					continue;
 				}
 
@@ -539,7 +531,7 @@ class Sync {
 					$bakdir = $this->config["BACKUPBATCHES"]."/".strftime("%F")."/pull/$node";
 					while (!is_dir ($bakdir) && !mkdir ($bakdir, 0777, TRUE)) {
 						syslog(LOG_ALERT, "Error creating backup directory $bakdir, cannot continue safely");
-						sleep ($this->config["FAILTIME"]);
+						$this->doSleep($this->config["FAILTIME"]);
 						$this->reloadConfig ($ident);
 					}
 
@@ -547,7 +539,7 @@ class Sync {
 						$batchFile = "$dir/$batch";
 						while (!file_exists ("$bakdir/$batch") && !link ($batchFile, "$bakdir/$batch")) {
 							syslog(LOG_ALERT, "Error creating backup link from $batchFile to $bakdir/$batch, cannot continue safely");
-							sleep ($this->config["FAILTIME"]);
+							$this->doSleep($this->config["FAILTIME"]);
 							$this->reloadConfig ($ident);
 						}
 					}
@@ -571,7 +563,7 @@ class Sync {
 				msg_send ($this->queue, $this->MSG_RESULT, array($node, "success"));
 			} catch (Exception $e) {
 				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
-				sleep($this->config["FAILTIME"]);
+				$this->doSleep($this->config["FAILTIME"]);
 			}
 		}
 	}
@@ -585,7 +577,7 @@ class Sync {
 				unset($errorcode);
 				if (!msg_receive ($this->queue, $this->MSG_PUSH, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
 					syslog(LOG_CRIT, "[push] Cannot pop from queue, sleeping: ".posix_strerror($errorcode));
-					sleep($this->config["FAILTIME"]);
+					$this->doSleep($this->config["FAILTIME"]);
 					continue;
 				}
 
@@ -595,7 +587,7 @@ class Sync {
 
 				while (!sem_acquire ($this->sems[$node])) {
 					syslog(LOG_INFO, "Cannot acquire lock for $node, retrying in ".$this->config["SCANTIME"]);
-					sleep($this->config["FAILTIME"]);
+					$this->doSleep($this->config["FAILTIME"]);
 				}
 
 				try {
@@ -630,7 +622,7 @@ class Sync {
 				}
 			} catch (Exception $e) {
 				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
-				sleep($this->config["FAILTIME"]);
+				$this->doSleep($this->config["FAILTIME"]);
 			}
 		}
 	}
