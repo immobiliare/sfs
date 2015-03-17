@@ -130,7 +130,7 @@ function mode_oldestage() {
 }
 
 function mode_count() {
-	safels -U $@|wc -l
+	safels -U $@|grep batch|wc -l
 }
 
 function mode_all() {
