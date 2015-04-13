@@ -293,6 +293,10 @@ class Sync {
 			}
 
 			$dir = $this->config["BATCHDIR"]."/$mode/$node";
+			if (!is_dir ($dir)) {
+				continue;
+			}
+			
 			$batches = scandir ($dir, 0); // sort ascending
 			if ($batches === FALSE) {
 				syslog(LOG_CRIT, "Cannot scan $dir, will retry in ".$this->config["FAILTIME"]." seconds");
