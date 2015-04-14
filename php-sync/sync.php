@@ -90,7 +90,9 @@ class Sync {
 	public function reopenLog ($subident="") {
 		closelog ();
 		$ident = str_replace ("%n", $subident, $this->config["LOG_IDENT"]);
-		cli_set_process_title ($ident);
+		if (version_compare(phpversion(), '5.5.0', '>=')) {
+			cli_set_process_title ($ident);
+		}
 		openlog($ident, $this->config["LOG_OPTIONS"], $this->config["LOG_FACILITY"]);
 	}
 	
