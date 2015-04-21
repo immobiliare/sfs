@@ -219,15 +219,21 @@ int sfs_rename(const char *path, const char *newpath) {
     sfs_fullpath(fpath, path);
     sfs_fullpath(fnewpath, newpath);
 
+	const char* mode = "norec";
+	
+	struct stat statbuf;
+	if (lstat(fpath, &statbuf) >= 0 && S_ISDIR (statbuf.st_mode)) {
+		mode = "rec";
+	}
+	
 	BEGIN_PERM;
 	retstat = rename(fpath, fnewpath);
 	END_PERM;
     if (retstat < 0) {
 		retstat = -errno;
 	} else {
-		
-		batch_file_event (path, "rec");
-		batch_file_event (newpath, "rec");
+		batch_file_event (path, mode);
+		batch_file_event (newpath, mode);
 	}
     
     return retstat;
