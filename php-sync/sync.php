@@ -29,8 +29,6 @@ ini_set ("error_log", "syslog");
 
 define('ESTIMATED_BATCH_NAME_LENGTH', 100);
 
-require dirname(__FILE__).'/config.php';
-
 function sync_shutdown () {
 	global $sync;
 	$sync->shutdown ();
@@ -42,7 +40,8 @@ class Sync {
 	public $MSG_PULL = 2;
 	public $MSG_RESULT = 3;
 
-	public function __construct () {
+	public function __construct ($configPath) {
+		$this->configPath = $configPath;
 		$this->nodeTimeout = array ();
 		register_shutdown_function (array ($this, "shutdown"));
 	}
@@ -101,7 +100,7 @@ class Sync {
 		global $CONFIG;
 		$curConfig = $CONFIG;
 		try {
-			require dirname(__FILE__).'/config.php';
+			require $this->configPath;
 			if ($curConfig == $CONFIG) {
 				return;
 			}
@@ -193,6 +192,7 @@ class Sync {
 	/* main process */
 	public function run () {
 		global $CONFIG;
+		require $this->configPath;
 		if (!$this->setConfig ($CONFIG)) {
 			echo "Could not load config, see syslog\n";
 			return;
@@ -736,5 +736,9 @@ class Sync {
 	}
 }
 
-$sync = new Sync ();
+$configPath = dirname(__FILE__).'/config.php';
+if (count($argv) > 1) {
+	$configPath = $argv[1];
+}
+$sync = new Sync ($configPath);
 $sync->run ();
