@@ -40,10 +40,18 @@ class Sync {
 	public $MSG_PULL = 2;
 	public $MSG_RESULT = 3;
 
-	public function __construct ($configPath) {
+	public function __construct ($configPath, $pidPath) {
 		$this->configPath = $configPath;
+		$this->pidPath = $pidPath;
 		$this->nodeTimeout = array ();
-		register_shutdown_function (array ($this, "shutdown"));
+
+		global $CONFIG;
+		require $this->configPath;
+		if (!$this->setConfig ($CONFIG)) {
+			echo "Could not load config, see syslog\n";
+			return;
+		}
+		$this->reopenLog ("main");
 	}
 
 	public function shutdown () {
@@ -51,6 +59,9 @@ class Sync {
 			return;
 		}
 		$this->didShutdown = TRUE;
+		if ($this->pidPath) {
+			unlink($this->pidPath);
+		}
 		$this->removeShm ();
 		syslog(LOG_NOTICE, "Shutdown successful");
 	}
@@ -188,16 +199,10 @@ class Sync {
 		$usec = (int)($time*1000000);
 		usleep($usec);
 	}
-	
+
 	/* main process */
 	public function run () {
-		global $CONFIG;
-		require $this->configPath;
-		if (!$this->setConfig ($CONFIG)) {
-			echo "Could not load config, see syslog\n";
-			return;
-		}
-		$this->reopenLog ("main");
+		register_shutdown_function (array ($this, "shutdown"));
 
 		if ($this->config["DRYRUN"]) {
 			syslog(LOG_NOTICE, "Started in dry-run mode");
@@ -736,9 +741,87 @@ class Sync {
 	}
 }
 
-$configPath = dirname(__FILE__).'/config.php';
-if (count($argv) > 1) {
-	$configPath = $argv[1];
+$opts = getopt("c:p:a:u:g:h");
+if ($opts === FALSE) {
+	exit(1);
 }
-$sync = new Sync ($configPath);
+
+if (!empty($opts["h"])) {
+	echo "Usage: {$argv[0]} [ -c config.php ] [ -p sync.pid ] [ -u uid ] [ -g gid ] [ -a start|stop ]\n";
+	exit(0);
+}
+
+$configPath = isset($opts["c"]) ? $opts["c"] : dirname(__FILE__)."/config.php";
+
+$sync = new Sync ($configPath, !empty($opts["p"]) ? $opts["p"] : null);
+
+if (!empty($opts["g"])) {
+	$gid = $opts["g"];
+	if (posix_setgid($gid) === FALSE) {
+		syslog(LOG_CRIT, "Could not setgid to $gid");
+		exit(1);
+	}
+}
+
+if (!empty($opts["u"])) {
+	$uid = $opts["u"];
+	if (posix_setuid($uid) === FALSE) {
+		syslog(LOG_CRIT, "Could not setuid to $uid");
+		exit(1);
+	}
+}
+
+$oldpid = null;
+if (!empty ($opts["p"])) {
+	$pidPath = $opts["p"];
+	$oldpid = (int)@file_get_contents($pidPath);
+}
+
+if (!empty($opts["a"]) && $opts["a"] == "stop") {
+	if (empty ($opts["p"])) {
+		syslog(LOG_CRIT, "Must specify the pidfile with -p");
+		exit(1);
+	}
+
+	if ($oldpid > 0) {
+		$pgid = posix_getpgid($oldpid);
+		if ($pgid > 0) {
+			if (posix_kill (-$pgid, SIGTERM) === FALSE) {
+				syslog(LOG_CRIT, "Could not kill $oldpid");
+				exit(1);
+			}
+		}
+	}
+
+	exit(0);
+}
+
+if (!empty($opts["a"]) && $opts["a"] != "start") {
+	syslog(LOG_CRIT, "Action must be either start or stop");
+	exit(1);
+}
+
+if ($oldpid > 0 && file_exists ("/proc/$oldpid")) {
+	syslog(LOG_CRIT, "Process already started: $oldpid");
+	exit(1);
+}
+
+if (!empty($opts["p"])) {
+	$pidPath = $opts["p"];
+
+	$pidfile = fopen($pidPath, 'c+');
+	if (!$pidfile) {
+		syslog(LOG_CRIT, "Cannot open pid file $pidPath");
+		exit(1);
+	}
+
+	fseek($pidfile, 0);
+	ftruncate($pidfile, 0);
+	fwrite($pidfile, posix_getpid());
+	fflush($pidfile);
+	fclose($pidfile);
+}
+
 $sync->run ();
+
+exit(0);

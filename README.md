@@ -33,6 +33,7 @@ System requirements
 - FUSE >= 2.8.1
 - rsync >= 3.1.0
 - ntpd is recommended
+- PHP >= 5.3
 
 It's been tested on Debian squeeze, wheezy and jessie. For Debian squeeze and wheezy there's no backport of rsync 3.1.0, our approach was to simply create a jessie chroot with the rsync 3.1.0 binary.
 
