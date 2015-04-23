@@ -726,7 +726,7 @@ class Sync {
 			
 			$status = proc_close ($p);
 			if (!in_array ($status, $this->config["ACCEPT_STATUS"])) {
-				syslog(LOG_CRIT, "Command '$command' stderr: $err");
+				syslog(LOG_CRIT, "Command '$command', status $status, stderr: $err");
 				return FALSE;
 			}
 		} else {
