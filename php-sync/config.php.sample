@@ -4,7 +4,7 @@ $RSYNC_OPTS = "-ltpDcuhRO --exclude /.sfs.conf --exclude /.sfs.mounted --delete-
 $CONFIG = array(
 "SYNC_DATA_NOREC" => "rsync -d --no-r $RSYNC_OPTS",
 "SYNC_DATA_REC" => "rsync -r $RSYNC_OPTS",
-"PULL_BATCHES" => "rsync -acduhRO --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d", // comment to disable pull
+"PULL_BATCHES" => "rsync -acduhO --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d", // comment to disable pull
 "ACCEPT_STATUS" => array(0, 24), // 24 = Partial transfer due to vanished source files (rsync)
 "NODES" => array(
 	"destnode" => array("DATA" => "rsync://desthost:destport/destdata/",
