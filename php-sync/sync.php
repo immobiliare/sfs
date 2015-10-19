@@ -304,13 +304,26 @@ class Sync {
 				continue;
 			}
 			
-			$batches = scandir ($dir, 0); // sort ascending
-			if ($batches === FALSE) {
-				syslog(LOG_CRIT, "Cannot scan $dir, will retry in ".$this->config["FAILTIME"]." seconds");
+			$hBatchDir = opendir($dir);
+			if ($hBatchDir === FALSE) {
+				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in ".$this->config["FAILTIME"]." seconds");
 				$this->setFailing ($node);
 				$tasks[] = array ();
 				continue;
 			}
+			
+			$batches = array();
+			for ($nBatch=0; $nBatch < $this->config["BULK_MAX_BATCHES"]*2; $nBatch++) {
+				$batchName = readdir($hBatchDir);
+				if ($batchName === FALSE) {
+					break;
+				}
+				
+				$batches[] = $batchName;
+			}
+			
+			closedir($hBatchDir);
+			
 
 			$rowno = 0;
 			$bulk = array ();
