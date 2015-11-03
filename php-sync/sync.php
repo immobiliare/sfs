@@ -3,7 +3,7 @@
 /*
  *  sync.php - SFS Asynchronous filesystem replication
  *
- *  Copyright © 2014  Immobiliare.it S.p.A.
+ *  Copyright © 2014-2015  Immobiliare.it S.p.A.
  *
  *  This file is part of SFS.
  *
@@ -690,8 +690,14 @@ class Sync {
 			}
 		}
 		
-		$command = $batchesType == "rec" ? $this->config["SYNC_DATA_REC"] : $this->config["SYNC_DATA_NOREC"];
 		$nodecfg = $this->config["NODES"][$node];
+		
+		if ($batchesType == "rec") {
+			$command = !empty($nodecfg["SYNC_DATA_REC"]) ? $nodecfg["SYNC_DATA_REC"] : $this->config["SYNC_DATA_REC"];
+		} else {
+			$command = !empty($nodecfg["SYNC_DATA_NOREC"]) ? $nodecfg["SYNC_DATA_NOREC"] : $this->config["SYNC_DATA_NOREC"];
+		}
+		
 		$subst = array ("%b" => $batchFile,
 						"%s" => ($mode == "push") ? $this->config["DATADIR"] : $nodecfg["DATA"],
 						"%d" => ($mode == "push") ? $nodecfg["DATA"] : $this->config["DATADIR"]);
