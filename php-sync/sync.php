@@ -311,9 +311,12 @@ class Sync {
 				$tasks[] = array ();
 				continue;
 			}
+
+			$nodecfg = $this->config["NODES"][$node];
+			$bulkMaxBatches = !empty($nodecfg["BULK_MAX_BATCHES"]) ? $nodecfg["BULK_MAX_BATCHES"] : $this->config["BULK_MAX_BATCHES"];
 			
 			$batches = array();
-			for ($nBatch=0; $nBatch < $this->config["BULK_MAX_BATCHES"]*2; $nBatch++) {
+			for ($nBatch=0; $nBatch < $bulkMaxBatches*2; $nBatch++) {
 				$batchName = readdir($hBatchDir);
 				if ($batchName === FALSE) {
 					break;
@@ -340,7 +343,7 @@ class Sync {
 				$mtime = filemtime ($batchFile);
 				if ($mtime === FALSE ||
 					$curtime - $mtime < $this->config["BULK_OLDER_THAN"] ||
-					$bulkCount > $this->config["BULK_MAX_BATCHES"] ||
+					$bulkCount > $bulkMaxBatches ||
 					($lastType && $curType != $lastType) // rec != norec
 				) {
 					# flush bulk
