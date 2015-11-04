@@ -27,7 +27,7 @@ error_reporting (E_ALL & ~E_STRICT);
 ini_set ("display_errors", 1);
 ini_set ("error_log", "syslog");
 
-define('ESTIMATED_BATCH_NAME_LENGTH', 100);
+define('ESTIMATED_BATCH_NAME_LENGTH', 150);
 
 function sync_shutdown () {
 	global $sync;
@@ -142,6 +142,10 @@ class Sync {
 	/* main process */
 	public function setupShm () {
 		$this->queue = msg_get_queue ($this->queueKey);
+		if (msg_set_queue($this->queue, array('msg_qbytes' => ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"])) === FALSE) {
+			syslog(LOG_CRIT, "Error adjusting queue message size");
+		}
+		
 		$this->sems = array();
 		foreach (array_keys ($this->config["NODES"]) as $node) {
 			$this->sems[$node] = sem_get ($this->semKeys[$node]);
