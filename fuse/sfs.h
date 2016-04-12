@@ -51,6 +51,8 @@ typedef struct {
 	pid_t pid;
 	pthread_mutex_t access_mutex;
 	int perm_checks;
+	int uid;
+	int gid;
 	int fuse_umask;
 	volatile int opened_fds;
 	char hostname[1024];

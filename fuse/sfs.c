@@ -40,6 +40,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <syslog.h>
+#include <stddef.h>
 
 #include "sfs.h"
 #include "config.h"
@@ -1035,27 +1036,71 @@ struct fuse_operations sfs_oper = {
 	*/
 };
 
+enum {
+	KEY_HELP,
+	KEY_VERSION,
+	KEY_PERMS,
+};
+
+#define SFS_OPT(t, p, v) { t, offsetof(SfsState, p), v }
+
+static struct fuse_opt sfs_opts[] = {
+	SFS_OPT("sfs_perms", perm_checks, 1),
+	SFS_OPT("sfs_uid=%i", uid, 0),
+	SFS_OPT("sfs_gid=%i", gid, 0),
+	FUSE_OPT_KEY("-V", KEY_VERSION),
+	FUSE_OPT_KEY("--version", KEY_VERSION),
+	FUSE_OPT_KEY("-h", KEY_HELP),
+	FUSE_OPT_KEY("--help", KEY_HELP),
+	FUSE_OPT_KEY("--perms", KEY_PERMS),
+	FUSE_OPT_END
+};
+
 void sfs_usage() {
-	fprintf(stderr, "usage: sfs [fuse mount options] [ --perms ] rootdir mountpoint\n");
+	fprintf(stderr,
+		"usage: sfs rootdir mountpoint\n"
+		"\n"
+		"general options:\n"
+		"    -o opt,[opt...]        mount options\n"
+		"    -o big_writes          uses '-o max_write' instead of 4k chunks\n"
+		"    -h   --help            print help\n"
+		"    -V   --version         print version\n"
+		"\n"
+		"SFS options:\n"
+		"    --perms                equivalent to '-o perms'\n"
+		"    -o sfs_uid=N           drop privileges to user\n"
+		"    -o sfs_gid=N           drop privileges to group\n"
+		"    -o sfs_perms           allow startup as root (not recommended)\n"
+		"\n"
+	);
 	abort();
 }
 
 static int sfs_opt_handler (void *data, const char *arg, int key, struct fuse_args *outargs) {
 	SfsState* state = (SfsState*) data;
-	if (!strcmp (arg, "--perms")) {
-		state->perm_checks = 1;
-		return 0;
-	} else if (!strcmp (arg, "-h") || !strcmp (arg, "--help")) {
-		execlp ("man", "man", "mount.fuse", NULL);
-	} else if (key == FUSE_OPT_KEY_NONOPT && !state->rootdir) {
-		state->rootdir = realpath (arg, NULL);
-		if (!state->rootdir) {
-			syslog(LOG_ERR, "[main] directory '%s' does not exist", arg);
+	switch (key) {
+		case KEY_PERMS:
+			state->perm_checks = 1;
+			return 0;
+		case KEY_HELP:
+			execlp("man", "man", "mount.fuse", NULL);
+		case KEY_VERSION:
 			return -1;
-		}
-		state->rootdir_len = state->rootdir ? strlen (state->rootdir) : -1;
-		return 0;
+		case FUSE_OPT_KEY_OPT:
+			break;
+		case FUSE_OPT_KEY_NONOPT:
+			if (!state->rootdir) {
+				state->rootdir = realpath(arg, NULL);
+				if (!state->rootdir) {
+					syslog(LOG_ERR, "[main] directory '%s' does not exist", arg);
+					return -1;
+				}
+				state->rootdir_len = state->rootdir ? strlen(state->rootdir) : -1;
+				return 0;
+			}
+			break;
 	}
+
 	return 1;
 }
 
@@ -1074,7 +1119,7 @@ int main(int argc, char **argv) {
 	openlog ("sfs-startup", LOG_PID|LOG_CONS|LOG_PERROR, LOG_DAEMON);
 	
 	struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
-	fuse_opt_parse (&args, state, NULL, sfs_opt_handler);
+	fuse_opt_parse (&args, state, sfs_opts, sfs_opt_handler);
 	
 	if (!state->rootdir) {
 		sfs_usage();
@@ -1083,6 +1128,24 @@ int main(int argc, char **argv) {
 	if (!sfs_is_directory (state->rootdir)) {
 		syslog(LOG_ERR, "[main] root %s is not a directory", state->rootdir);
 		return 1;
+	}
+
+	if (state->uid || state->gid) {
+		if (!(state->uid && state->gid)) {
+			syslog(LOG_ERR, "uid and gid must be set");
+			abort();
+		}
+		if (setgid(state->gid) == -1) {
+			syslog(LOG_ERR, "unable to drop privileges to gid %i", state->gid);
+			abort();
+
+		}
+		if (setuid(state->uid) == -1) {
+			syslog(LOG_ERR, "unable to drop privileges to uid %i", state->uid);
+			abort();
+		}
+
+		syslog(LOG_NOTICE, "Drop privileges to uid=%i, gid=%i\n", state->uid, state->gid);
 	}
 
 	if (!state->perm_checks && (getuid() == 0 || geteuid() == 0)) {
