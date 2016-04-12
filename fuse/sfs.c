@@ -1053,9 +1053,9 @@ enum {
 #define SFS_OPT(t, p, v) { t, offsetof(SfsState, p), v }
 
 static struct fuse_opt sfs_opts[] = {
-	SFS_OPT("perms", perm_checks, 1),
-	SFS_OPT("uid=%i", uid, 0),
-	SFS_OPT("gid=%i", gid, 0),
+	SFS_OPT("sfs_perms", perm_checks, 1),
+	SFS_OPT("sfs_uid=%i", uid, 0),
+	SFS_OPT("sfs_gid=%i", gid, 0),
 	FUSE_OPT_KEY("-V", KEY_VERSION),
 	FUSE_OPT_KEY("--version", KEY_VERSION),
 	FUSE_OPT_KEY("-h", KEY_HELP),
@@ -1070,14 +1070,15 @@ void sfs_usage() {
 					"\n"
 					"general options:\n"
 					"    -o opt,[opt...]        mount options\n"
+					"    -o big_writes          uses '-o max_write' instead of 4k chunks\n"
 					"    -h   --help            print help\n"
 					"    -V   --version         print version\n"
 					"\n"
 					"SFS options:\n"
 					"    --perms                equivalent to '-o perms'\n"
-					"    -o uid=N               drop privileges to user\n"
-					"    -o gid=N               drop privileges to group\n"
-					"    -o perms               allow startup as root (not recommended)\n"
+					"    -o sfs_uid=N               drop privileges to user\n"
+					"    -o sfs_gid=N               drop privileges to group\n"
+					"    -o sfs_perms               allow startup as root (not recommended)\n"
 					"\n"
 					);
 	abort();
@@ -1245,8 +1246,8 @@ int main(int argc, char **argv) {
 	closelog();
 
 	//add general options
-	fuse_opt_add_arg(&args, "-obig_writes,kernel_cache,use_ino");
-	
+	fuse_opt_add_arg(&args, "-okernel_cache,use_ino");
+
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &sfs_oper, state);
 	syslog(LOG_INFO, "[main] fuse_main returned %d\n", fuse_stat);
