@@ -104,7 +104,7 @@ Starting SFS-FUSE
 We can finally mount the filesystem as sfs user on each node:
 
 ```
-$ sfs -o kernel_cache,use_ino /mnt/data /mnt/fuse
+$ sfs /mnt/data /mnt/fuse
 ```
 
 Test it by writing a file in the FUSE mountpoint, and checking it created a batch in `/mnt/batches/tmp`:
@@ -150,6 +150,23 @@ $ fusermount -u /mnt/fuse
 Pending batches under `/mnt/batches/tmp` will be automatically moved to `/mnt/batches` on the next SFS startup.
 
 **Note**: `kill -9` of the process may result in loss of batches if `use_osync` is not enabled in the configuration.
+
+
+Adding SFS-FUSE to fstab
+---------------
+The FUSE filesystem can be added to the /etc/fstab as follows, if the executeable is copied to e.g. /usr/local/bin:
+
+1. for a specific user with id 1000 in group 1000
+```
+sfs#/mnt/data /mnt/fuse fuse noatime,sfs_uid=1000,sfs_gid=1000 0 0
+```
+The filesystem will be mounted at startup and the sfs process is owned by the user with the id 1000, group 1000, so every file access on /mnt/data is issued by this user.
+
+2. to all users
+```
+sfs#/mnt/data /mnt/fuse fuse noatime,allow_other,sfs_perms 0 0
+```
+The filesystem will be mounted at startup, sfs is running as root. Be aware this can cause a security problem if any bufferoverflow in fuse or sfs is discovered.
 
 
 Sync daemon component

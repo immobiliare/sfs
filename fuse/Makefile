@@ -3,7 +3,7 @@ LDFLAGS=-pthread
 ifdef DEBUG
 CFLAGS+=-fno-inline -ggdb -O0
 else
-CFLAGS+=-O2
+CFLAGS+=-Ofast
 endif
 CSRCS=sfs.c util.c batch.c setproctitle.c config.c inih/ini.c
 CPPSRCS=set.cpp
