@@ -784,16 +784,15 @@ int sfs_releasedir (const char *path, struct fuse_file_info *fi) {
 }
 
 /** Synchronize directory contents
-*
-* If the datasync parameter is non-zero, then only the user data
-* should be flushed, not the meta data
-*
-* Introduced in version 2.3
-*/
-// when exactly is this called?  when a user calls fsync and it
-// happens to be a directory? ???
-int sfs_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi)
-{
+ *
+ * If the datasync parameter is non-zero, then only the user data
+ * should be flushed, not the meta data
+ *
+ * Introduced in version 2.3
+ * caused by mount option dirsync, which causes directory operations e.g. mkdir to be synchronous
+ */
+
+int sfs_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi) {
 	int retstat = 0;
 	DIR *dp;
 	int fd;
