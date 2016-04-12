@@ -1231,7 +1231,13 @@ int main(int argc, char **argv) {
 
 	syslog (LOG_INFO, "[main] starting sfs with root=%s, uid=%d, gid=%d, umask=%03o; closing console syslog", state->rootdir, getuid(), getgid(), state->fuse_umask);
 	closelog ();
-	
+
+	// set pretty fsname and fstype
+	char buf[1024];
+	snprintf(buf, sizeof buf, "-ofsname=%s", state->rootdir);
+	fuse_opt_add_arg(&args, buf);
+	fuse_opt_add_arg(&args, "-osubtype=sfs");
+
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &sfs_oper, state);
 	syslog (LOG_INFO, "[main] fuse_main returned %d\n", fuse_stat);
