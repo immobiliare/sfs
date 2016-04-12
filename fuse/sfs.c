@@ -1053,7 +1053,7 @@ enum {
 #define SFS_OPT(t, p, v) { t, offsetof(SfsState, p), v }
 
 static struct fuse_opt sfs_opts[] = {
-	SFS_OPT("perms", perm_checks, 0),
+	SFS_OPT("perms", perm_checks, 1),
 	SFS_OPT("uid=%i", uid, 0),
 	SFS_OPT("gid=%i", gid, 0),
 	FUSE_OPT_KEY("-V", KEY_VERSION),
@@ -1127,6 +1127,7 @@ int main(int argc, char **argv) {
 
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	fuse_opt_parse(&args, state, sfs_opts, sfs_opt_handler);
+	fuse_opt_add_arg(&args, "-obig_writes");
 
 	if (!state->rootdir) {
 		sfs_usage();
@@ -1142,15 +1143,17 @@ int main(int argc, char **argv) {
 			syslog(LOG_ERR, "uid and gid must be set");
 			abort();
 		}
-		if (setuid(getuid()) == -1) {
-			syslog(LOG_ERR, "unable to drop privileges to uid %i", state->uid);
-			abort();
-		}
-		if (setgid(getgid()) == -1) {
+		if (setgid(state->gid) == -1) {
 			syslog(LOG_ERR, "unable to drop privileges to gid %i", state->gid);
 			abort();
 
 		}
+		if (setuid(state->uid) == -1) {
+			syslog(LOG_ERR, "unable to drop privileges to uid %i", state->uid);
+			abort();
+		}
+
+		//fuse_opt_add_arg(outargs, "--version");
 		syslog(LOG_NOTICE, "Drop privileges to uid=%i, gid=%i\n", state->uid, state->gid);
 	}
 
