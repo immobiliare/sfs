@@ -209,12 +209,12 @@ error:
 static void config_init (SfsState* state) {
 	state->log_facility = -1;
 	state->update_mtime = UPDATE_MTIME_NO;
-	strcpy (state->hostname, "invalid");
+	strncpy (state->hostname, "invalid", sizeof state->hostname);
 }
 
 int sfs_config_load (SfsState* state) {
 	config_init (state);
-	
+
 	int ret = ini_parse (state->configpath, ini_handler, state);
 	if (ret < 0) {
         syslog(LOG_ERR, "[config] can't load config %s: %s", state->configpath, strerror (errno));
@@ -237,10 +237,10 @@ int sfs_config_reload (void) {
 	SfsState new_state;
 	memset(&new_state, '\0', sizeof(SfsState));
 	config_init (&new_state);
-	
+
 	pthread_mutex_lock (&(state->config_mutex));
 	syslog(LOG_INFO, "Reloading config %s", state->configpath);
-	
+
 	int ret = ini_parse (state->configpath, ini_handler, &new_state);
 	if (ret < 0) {
         syslog(LOG_CRIT, "[config] can't load config %s: %s", state->configpath, strerror (errno));
@@ -285,7 +285,7 @@ int sfs_config_reload (void) {
 	openlog (state->log_ident, LOG_PID, state->log_facility);
     syslog(LOG_NOTICE, "Config reloaded from %s", state->configpath);
 	pthread_mutex_unlock (&(state->config_mutex));
-	
+
 	return 1;
 
 error:
@@ -295,7 +295,7 @@ error:
 	NSFREE(node_name);
 	NSFREE(ignore_path_prefix);
 	NSFREE(log_ident);
-	
+
 	pthread_mutex_unlock (&(state->config_mutex));
 	return 0;
 }
