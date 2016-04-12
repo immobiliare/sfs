@@ -1127,7 +1127,6 @@ int main(int argc, char **argv) {
 
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	fuse_opt_parse(&args, state, sfs_opts, sfs_opt_handler);
-	fuse_opt_add_arg(&args, "-obig_writes");
 
 	if (!state->rootdir) {
 		sfs_usage();
@@ -1245,6 +1244,9 @@ int main(int argc, char **argv) {
 	syslog(LOG_INFO, "[main] starting sfs with root=%s, uid=%d, gid=%d, umask=%03o; closing console syslog", state->rootdir, getuid(), getgid(), state->fuse_umask);
 	closelog();
 
+	//add general options
+	fuse_opt_add_arg(&args, "-obig_writes,kernel_cache,use_ino");
+	
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &sfs_oper, state);
 	syslog(LOG_INFO, "[main] fuse_main returned %d\n", fuse_stat);
