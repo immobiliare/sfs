@@ -798,9 +798,8 @@ int sfs_releasedir(const char *path, struct fuse_file_info *fi) {
  * should be flushed, not the meta data
  *
  * Introduced in version 2.3
+ * => mount option dirsync, which causes directory operations e.g. mkdir to be synchronous
  */
-// when exactly is this called?  when a user calls fsync and it
-// happens to be a directory? ???
 
 int sfs_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi) {
 	int retstat = 0;
@@ -1247,6 +1246,10 @@ int main(int argc, char **argv) {
 
 	//add general options
 	fuse_opt_add_arg(&args, "-okernel_cache,use_ino");
+	char buf[1024];
+	snprintf(buf, sizeof buf, "-ofsname=%s", state->rootdir);
+	fuse_opt_add_arg(&args, buf);
+	fuse_opt_add_arg(&args, "-osubtype=sfs");
 
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &sfs_oper, state);
