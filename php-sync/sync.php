@@ -218,10 +218,10 @@ class Sync {
 		$this->setupShm ();
 
 		// fork batch creator
-		$pid = pcntl_fork ();
-		if ($pid < 0) {
+		$pidBatch = pcntl_fork ();
+		if ($pidBatch < 0) {
 			die ("Could not fork batch creator");
-		} else if ($pid == 0) {
+		} else if ($pidBatch == 0) {
 			// child
 			$this->enqueueLoop ();
 		}
@@ -229,7 +229,7 @@ class Sync {
 		// fork puller
 		$pid = pcntl_fork ();
 		if ($pid < 0) {
-			die ("Could not fork batch creator");
+			die ("Could not fork puller");
 		} else if ($pid == 0) {
 			// child
 			$this->pullLoop ("pull");
@@ -627,7 +627,7 @@ class Sync {
 						$res = TRUE;
 					}
 				} catch (Exception $e) {
-					syslog(LOG_CRIT, "Error while syncing $node $batchFile: ".print_r($e));
+					syslog(LOG_CRIT, "Error while syncing $node $batches: ".print_r($e));
 					$res = FALSE;
 				}
 
@@ -742,7 +742,8 @@ class Sync {
 		if ($input) {
 			$desc[0] = array('pipe', 'r');
 		}
-		
+
+		$pipes = array();
 		// spawn the process
 		$p = proc_open($command, $desc, $pipes);
 		if (is_resource ($p)) {
@@ -798,10 +799,10 @@ if (!empty($opts["u"])) {
 	}
 }
 
-$oldpid = null;
+$oldpid = 0;
 if (!empty ($opts["p"])) {
 	$pidPath = $opts["p"];
-	$oldpid = (int)@file_get_contents($pidPath);
+	$oldpid = (int) is_readable($pidPath) ? file_get_contents($pidPath) : 0;
 }
 
 if (!empty($opts["a"]) && $opts["a"] == "stop") {
