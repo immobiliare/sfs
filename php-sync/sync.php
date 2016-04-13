@@ -229,7 +229,7 @@ class Sync {
 		// fork puller
 		$pid = pcntl_fork ();
 		if ($pid < 0) {
-			die ("Could not fork puller creator");
+			die ("Could not fork puller");
 		} else if ($pid == 0) {
 			// child
 			$this->pullLoop ("pull");
@@ -407,6 +407,7 @@ class Sync {
 	public function waitComplete ($n) {
 		$msgtype = $message = $errorcode = '';
 		while ($n > 0) {
+			$errorcode='';
 			if (!msg_receive ($this->queue, $this->MSG_RESULT, $msgtype, 4096, $message, true, 0, $errorcode)) {
 				syslog(LOG_CRIT, "Error waiting completion from queue: ".posix_strerror($errorcode));
 			} else {
@@ -544,6 +545,7 @@ class Sync {
 		while (TRUE) {
 			$this->reloadConfig ($ident);
 			try {
+				$errorcode='';
 				if (!msg_receive ($this->queue, $this->MSG_PULL, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
 					syslog(LOG_CRIT, "[pull] Cannot pop from queue, putting worker in sleep: ".posix_strerror($errorcode));
 					$this->doSleep($this->config["FAILTIME"]);
@@ -606,6 +608,7 @@ class Sync {
 		while (TRUE) {
 			$this->reloadConfig ($ident);
 			try {
+				$errorcode='';
 				if (!msg_receive ($this->queue, $this->MSG_PUSH, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
 					syslog(LOG_CRIT, "[push] Cannot pop from queue, sleeping: ".posix_strerror($errorcode));
 					$this->doSleep($this->config["FAILTIME"]);

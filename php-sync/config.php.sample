@@ -1,7 +1,7 @@
 <?php
 # BUG --xattrs https://bugzilla.samba.org/show_bug.cgi?id=10381
 $RSYNC_OPTS = "-ltpDcuhRO --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --delete-delay --files-from=%b %s %d";
-$dataDir="/path/data/";
+$DATADIR="/path/data/";
 
 $CONFIG = array(
 "SYNC_DATA_NOREC" => "rsync -d --no-r $RSYNC_OPTS",
@@ -19,9 +19,9 @@ $CONFIG = array(
 "BULK_MAX_BATCHES" => 100,
 
 "BACKUPBATCHES" => "/path/batches/backup", // comment to disable backups
-"DATADIR" => $dataDir,
+"DATADIR" => $DATADIR,
 "BATCHDIR" => "/path/batches",
-"CHECKFILE" => $dataDir.".sfs.mounted", // stop syncing if this file does not exist, it is checked periodically
+"CHECKFILE" => $DATADIR.".sfs.mounted", // stop syncing if this file does not exist, it is checked periodically
 "SCANTIME" => 1, // sleep X seconds before scanning for new batches
 "FAILTIME" => 10, // retry after normal sleep + X seconds instead of $SCANTIME in case of fail
 "LOG_IDENT" => "sfs-sync(%n)", // %n is replaced with the name of the subprocess

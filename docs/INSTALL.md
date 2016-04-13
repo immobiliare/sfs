@@ -154,19 +154,19 @@ Pending batches under `/mnt/batches/tmp` will be automatically moved to `/mnt/ba
 
 Adding SFS-FUSE to fstab
 ---------------
-The FUSE filesystem can be added to the /etc/fstab as follows, if the executeable is copied to e.g. /usr/local/bin:
+The FUSE filesystem can be added to the /etc/fstab as follows, if the executable is copied to e.g. /usr/local/bin.
 
-1. for a specific user with id 1000 in group 1000
+Either for a specific user with id 1000 in group 1000:
 ```
 sfs#/mnt/data /mnt/fuse fuse noatime,sfs_uid=1000,sfs_gid=1000 0 0
 ```
 The filesystem will be mounted at startup and the sfs process is owned by the user with the id 1000, group 1000, so every file access on /mnt/data is issued by this user.
 
-2. to all users
+Or with normal users ownership:
 ```
 sfs#/mnt/data /mnt/fuse fuse noatime,allow_other,sfs_perms 0 0
 ```
-The filesystem will be mounted at startup, sfs is running as root. Be aware this can cause a security problem if any bufferoverflow in fuse or sfs is discovered.
+In this case the filesystem will be mounted at startup, and the sfs process will run as root. Be aware this can cause a security problem if any bufferoverflow in fuse or sfs is discovered.
 
 
 Sync daemon component

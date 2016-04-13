@@ -94,7 +94,6 @@ int sfs_getattr(const char *path, struct stat *statbuf) {
 // null.  So, the size passed to to the system readlink() must be one
 // less than the size passed to sfs_readlink()
 // sfs_readlink() code by Bernardo F Costa (thanks!)
-
 int sfs_readlink(const char *path, char *link, size_t size) {
 	int retstat = 0;
 	char fpath[PATH_MAX];
@@ -798,7 +797,7 @@ int sfs_releasedir(const char *path, struct fuse_file_info *fi) {
  * should be flushed, not the meta data
  *
  * Introduced in version 2.3
- * => mount option dirsync, which causes directory operations e.g. mkdir to be synchronous
+ * caused by mount option dirsync, which causes directory operations e.g. mkdir to be synchronous
  */
 
 int sfs_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi) {
@@ -1065,21 +1064,21 @@ static struct fuse_opt sfs_opts[] = {
 
 void sfs_usage() {
 	fprintf(stderr,
-					"usage: sfs rootdir mountpoint\n"
-					"\n"
-					"general options:\n"
-					"    -o opt,[opt...]        mount options\n"
-					"    -o big_writes          uses '-o max_write' instead of 4k chunks\n"
-					"    -h   --help            print help\n"
-					"    -V   --version         print version\n"
-					"\n"
-					"SFS options:\n"
-					"    --perms                equivalent to '-o perms'\n"
-					"    -o sfs_uid=N               drop privileges to user\n"
-					"    -o sfs_gid=N               drop privileges to group\n"
-					"    -o sfs_perms               allow startup as root (not recommended)\n"
-					"\n"
-					);
+		"usage: sfs rootdir mountpoint\n"
+		"\n"
+		"general options:\n"
+		"    -o opt,[opt...]        mount options\n"
+		"    -o big_writes          uses '-o max_write' instead of 4k chunks\n"
+		"    -h   --help            print help\n"
+		"    -V   --version         print version\n"
+		"\n"
+		"SFS options:\n"
+		"    --perms                equivalent to '-o perms'\n"
+		"    -o sfs_uid=N           drop privileges to user\n"
+		"    -o sfs_gid=N           drop privileges to group\n"
+		"    -o sfs_perms           allow startup as root (not recommended)\n"
+		"\n"
+	);
 	abort();
 }
 
@@ -1094,7 +1093,6 @@ static int sfs_opt_handler(void *data, const char *arg, int key, struct fuse_arg
 		case KEY_VERSION:
 			return -1;
 		case FUSE_OPT_KEY_OPT:
-			fprintf(stderr, "kee %s", arg);
 			break;
 		case FUSE_OPT_KEY_NONOPT:
 			if (!state->rootdir) {
@@ -1106,6 +1104,7 @@ static int sfs_opt_handler(void *data, const char *arg, int key, struct fuse_arg
 				state->rootdir_len = state->rootdir ? strlen(state->rootdir) : -1;
 				return 0;
 			}
+			break;
 	}
 
 	return 1;
@@ -1122,12 +1121,12 @@ int main(int argc, char **argv) {
 		perror("[main] state calloc failed");
 		abort();
 	}
-
-	openlog("sfs-startup", LOG_PID | LOG_CONS | LOG_PERROR, LOG_DAEMON);
-
-	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	fuse_opt_parse(&args, state, sfs_opts, sfs_opt_handler);
-
+	
+	openlog ("sfs-startup", LOG_PID|LOG_CONS|LOG_PERROR, LOG_DAEMON);
+	
+	struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
+	fuse_opt_parse (&args, state, sfs_opts, sfs_opt_handler);
+	
 	if (!state->rootdir) {
 		sfs_usage();
 	}
@@ -1152,7 +1151,6 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		//fuse_opt_add_arg(outargs, "--version");
 		syslog(LOG_NOTICE, "Drop privileges to uid=%i, gid=%i\n", state->uid, state->gid);
 	}
 
@@ -1246,6 +1244,7 @@ int main(int argc, char **argv) {
 
 	//add general options
 	fuse_opt_add_arg(&args, "-okernel_cache,use_ino");
+	// set pretty fsname and fstype
 	char buf[1024];
 	snprintf(buf, sizeof buf, "-ofsname=%s", state->rootdir);
 	fuse_opt_add_arg(&args, buf);
