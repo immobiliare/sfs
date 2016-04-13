@@ -93,8 +93,7 @@ int sfs_getattr(const char *path, struct stat *statbuf) {
 // null.  So, the size passed to to the system readlink() must be one
 // less than the size passed to sfs_readlink()
 // sfs_readlink() code by Bernardo F Costa (thanks!)
-int sfs_readlink(const char *path, char *link, size_t size)
-{
+int sfs_readlink(const char *path, char *link, size_t size) {
     int retstat = 0;
     char fpath[PATH_MAX];
     sfs_fullpath(fpath, path);
@@ -646,8 +645,7 @@ int sfs_getxattr(const char *path, const char *name, char *value, size_t size) {
 }
 
 /** List extended attributes */
-int sfs_listxattr(const char *path, char *list, size_t size)
-{
+int sfs_listxattr(const char *path, char *list, size_t size) {
     int retstat = 0;
     char fpath[PATH_MAX];
     sfs_fullpath(fpath, path);
@@ -663,8 +661,7 @@ int sfs_listxattr(const char *path, char *list, size_t size)
 }
 
 /** Remove extended attributes */
-int sfs_removexattr(const char *path, const char *name)
-{
+int sfs_removexattr(const char *path, const char *name) {
     int retstat = 0;
     char fpath[PATH_MAX];
     sfs_fullpath(fpath, path);
