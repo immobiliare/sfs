@@ -230,7 +230,7 @@ class Sync {
 		// fork puller
 		$pid = pcntl_fork ();
 		if ($pid < 0) {
-			die ("Could not fork puller creator");
+			die ("Could not fork puller");
 		} else if ($pid == 0) {
 			// child
 			$this->pullLoop ("pull");
@@ -306,39 +306,32 @@ class Sync {
 
 			$dir = $this->config["BATCHDIR"]."/$mode/$node";
 			if (!is_dir ($dir)) {
+				mkdir ($dir, 0777, TRUE);
+			}
+			if(!is_dir($dir)){
+				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in ".$this->config["FAILTIME"]." seconds");
+				$this->setFailing ($node);
 				continue;
 			}
 
-			$hBatchDir = opendir($dir);
-			if ($hBatchDir === FALSE) {
-				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in ".$this->config["FAILTIME"]." seconds");
-				$this->setFailing ($node);
-				$tasks[] = array ();
+			$allBatches = glob($dir . '/*_*.batch');
+			if(empty($allBatches)){
+				//nothing to do
 				continue;
 			}
 
 			$nodecfg = $this->config["NODES"][$node];
 			$bulkMaxBatches = !empty($nodecfg["BULK_MAX_BATCHES"]) ? $nodecfg["BULK_MAX_BATCHES"] : $this->config["BULK_MAX_BATCHES"];
 
-			$batches = array();
-			for ($nBatch=0; $nBatch < $bulkMaxBatches*2; $nBatch++) {
-				$batchName = readdir($hBatchDir);
-				if ($batchName === FALSE) {
-					break;
-				}
-
-				$batches[] = $batchName;
-			}
-
-			closedir($hBatchDir);
-
+			$batches = array_map('basename', array_splice($allBatches, 0, $bulkMaxBatches * 2));
+			unset($allBatches);
 
 			$rowno = 0;
 			$match = $bulk = array();
 			$bulkCount = 0;
 			$lastType = null;
 			foreach ($batches as $batch) {
-				if (!preg_match ("/_([^_\.]+)\.batch$/", $batch, $match)) {
+				if (!preg_match ('/_([^_\.]+)\.batch$/', $batch, $match)) {
 					continue;
 				}
 				$curType = $match[1];
@@ -389,6 +382,7 @@ class Sync {
 					$task = $row[$nodeId];
 					if (!in_array ($task[0], $scheduledNodes)) {
 						$msgtype = $mode == "push" ? $this->MSG_PUSH : $this->MSG_PULL;
+
 						if (!msg_send ($this->queue, $msgtype, $task)) {
 							syslog(LOG_CRIT, "Error scheduling task ".print_r($task, true));
 						} else {
@@ -457,7 +451,10 @@ class Sync {
 		}
 		$match = array();
 		foreach ($batches as &$batch) {
-			if (!preg_match ("/^[^_]+_([^_]+)_[^.]+\.batch$/", $batch, $match)) {
+			if (!preg_match ("/^\d+_([^_]+)_.*\.batch$/", $batch, $match)) {
+				/*if(!empty($this->config["LOG_DEBUG"])){
+					syslog(LOG_DEBUG, "batch doesn't match " . $batch);
+				}*/
 				continue;
 			}
 			$batchNode = $match[1];
@@ -470,7 +467,9 @@ class Sync {
 				}
 
 				$nodedir = "$dir/push/$node";
-				@mkdir ($nodedir, 0777, TRUE);
+				if(!is_dir($nodedir)){
+					mkdir($nodedir, 0777, TRUE);
+				}
 				while (!file_exists ("$nodedir/$batch") && !link ("$dir/$batch", "$nodedir/$batch")) {
 					syslog(LOG_ALERT, "Error creating link from $dir/$batch to $nodedir/$batch, cannot continue safely");
 					$this->doSleep($this->config["FAILTIME"]);
@@ -521,7 +520,9 @@ class Sync {
 		}
 
 		$dir = $this->config["BATCHDIR"]."/pull/$node";
-		@mkdir ($dir, 0777, TRUE);
+		if(!is_dir($dir)){
+			mkdir ($dir, 0777, TRUE);
+		}
 
 		$command = $this->config["PULL_BATCHES"];
 		$subst = array ("%s" => $this->config["NODES"][$node]["BATCHES"],
@@ -550,11 +551,13 @@ class Sync {
 					$this->doSleep($this->config["FAILTIME"]);
 					continue;
 				}
-
 				list($node, $batches) = $message;
 				$dir = $this->config["BATCHDIR"]."/pull/$node";
+		if(!is_dir($dir)){
+			mkdir ($dir, 0777, TRUE);
+		}
 
-				if (!$this->syncDataBatch ($node, $batches, "pull")) {
+		if (!$this->syncDataBatch ($node, $batches, "pull")) {
 					msg_send ($this->queue, $this->MSG_RESULT, array($node, "fail"));
 					continue;
 				}
@@ -591,7 +594,6 @@ class Sync {
 					}
 					unset($batchFile);
 				}
-
 				msg_send ($this->queue, $this->MSG_RESULT, array($node, "success"));
 			} catch (Exception $e) {
 				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
@@ -615,6 +617,10 @@ class Sync {
 
 				list($node, $batches) = $message;
 				$dir = $this->config["BATCHDIR"]."/push/$node";
+
+				if(!is_dir($dir)){
+					mkdir ($dir, 0777, TRUE);
+				}
 				$res = FALSE;
 
 				while (!sem_acquire ($this->sems[$node])) {
@@ -647,11 +653,7 @@ class Sync {
 					unset($batchFile);
 				}
 
-				if ($res) {
-					msg_send ($this->queue, $this->MSG_RESULT, array($node, "success"));
-				} else {
-					msg_send ($this->queue, $this->MSG_RESULT, array($node, "fail"));
-				}
+				msg_send($this->queue, $this->MSG_RESULT, array($node, ($res ? "success" : "fail")));
 			} catch (Exception $e) {
 				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
 				$this->doSleep($this->config["FAILTIME"]);
@@ -747,23 +749,22 @@ class Sync {
 		$pipes = array();
 		// spawn the process
 		$p = proc_open($command, $desc, $pipes);
-		if (is_resource ($p)) {
-			// write stdin
-			if ($input) {
-				fwrite($pipes[0], $input);
-				fclose($pipes[0]);
-			}
+		if (!is_resource ($p)) {
+			return FALSE;
+		}
+		// write stdin
+		if ($input) {
+			fwrite($pipes[0], $input);
+			fclose($pipes[0]);
+		}
 
-			// read stderr
-			$err = stream_get_contents($pipes[2]);
-			fclose($pipes[2]);
+		// read stderr
+		$err = stream_get_contents($pipes[2]);
+		fclose($pipes[2]);
 
-			$status = proc_close ($p);
-			if (!in_array ($status, $this->config["ACCEPT_STATUS"])) {
-				syslog(LOG_CRIT, "Command '$command', status $status, stderr: $err");
-				return FALSE;
-			}
-		} else {
+		$status = proc_close ($p);
+		if (!in_array ($status, $this->config["ACCEPT_STATUS"])) {
+			syslog(LOG_CRIT, "Command '$command', status $status, stderr: $err");
 			return FALSE;
 		}
 		return TRUE;
@@ -783,18 +784,22 @@ if (!empty($opts["h"])) {
 $configPath = isset($opts["c"]) ? $opts["c"] : dirname(__FILE__)."/config.php";
 
 $sync = new Sync ($configPath, !empty($opts["p"]) ? $opts["p"] : null);
+//have config for UID/GID
+require $configPath;
 
-if (!empty($opts["g"])) {
-	$gid = $opts["g"];
-	if (posix_setgid($gid) === FALSE) {
+//direct parameter has precedence over config var
+$gid = intval(empty($opts["g"]) ? (empty($GID) ? 0 : $GID) : $opts["g"]);
+if($gid){
+	if(posix_setgid($gid) === FALSE){
 		syslog(LOG_CRIT, "Could not setgid to $gid");
 		exit(1);
 	}
 }
 
-if (!empty($opts["u"])) {
-	$uid = $opts["u"];
-	if (posix_setuid($uid) === FALSE) {
+//direct parameter has precedence over config var
+$uid = intval(empty($opts["u"]) ? (empty($UID) ? 0 : $UID) : $opts["u"]);
+if($uid){
+	if(posix_setuid($uid) === FALSE){
 		syslog(LOG_CRIT, "Could not setuid to $uid");
 		exit(1);
 	}

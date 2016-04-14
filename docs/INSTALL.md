@@ -250,6 +250,8 @@ $CONFIG = array(
 );
 ```
 
+IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
+
 Now we can start it via a direct call:
 
 ```
@@ -367,6 +369,8 @@ $CONFIG = array(
 "DRYRUN" => false
 );
 ```
+
+IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
 
 Now we can start it via a direct call:
 
