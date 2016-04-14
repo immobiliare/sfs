@@ -1,5 +1,5 @@
 [Unit]
-Description=Sync Daemon process for sfs using config %I
+Description=Sync Daemon process for sfs using config "%I"
 After=network.target
 
 [Service]
