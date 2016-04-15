@@ -692,12 +692,14 @@ class Sync {
 			$batchFile = "$dir/$batch";
 		} else {
 			$batchFile = "-";
-			$input = "";
+			$tmp = array();
 			// read batch contents
 			foreach ($batches as $batch) {
 				$curBatchFile = "$dir/$batch";
-				$input .= trim(file_get_contents ($curBatchFile))."\n";
+				$tmp = explode("\n",trim(file_get_contents ($curBatchFile)));
 			}
+			//if this will generate one transaction, we don't need duplicates & the order should not
+			$input = implode("\n", array_unique($tmp)) . "\n";
 		}
 
 		$nodecfg = $this->config["NODES"][$node];
@@ -742,6 +744,12 @@ class Sync {
 		$desc = array(
 			2 => array('pipe', 'w')
 		);
+
+		//we don't need the output of sync in normal operation mode, just print it in debug mode
+		if(!empty($this->config["LOG_DEBUG"])){
+			$desc[1] = array("file", "/dev/null", "w");
+		}
+
 		if ($input) {
 			$desc[0] = array('pipe', 'r');
 		}
@@ -752,19 +760,38 @@ class Sync {
 		if (!is_resource ($p)) {
 			return FALSE;
 		}
+		stream_set_blocking($pipes[2], 0);
 		// write stdin
 		if ($input) {
-			fwrite($pipes[0], $input);
-			fclose($pipes[0]);
+			stream_set_blocking($pipes[0], 0);
 		}
-
-		// read stderr
-		$err = stream_get_contents($pipes[2]);
+		$err = '';
+		$inputLen = $input ? strlen($input) : 0;
+		$inputPos = 0;
+		while($inputLen || feof($pipes[2])){
+			if($inputLen && $inputPos != $inputLen){
+				$inputPos+=fwrite($pipes[0], substr($input, $inputPos, 8192));
+			} elseif($inputLen) {
+				$inputLen = false;
+				fclose($pipes[0]);
+			}
+			// read stderr
+			$tmp = fgets($pipes[2], 1024);
+			//wait if nothing read - but only if we don't have data to write
+			if(!$inputLen && strlen($tmp) === 0){
+				usleep(10 * 1000);
+			} else {
+				$err.=$tmp;
+			}
+		}
+		if(strlen($input) != $inputPos){
+			echo 'WARNING LENGTH MISSMATCH ' . strlen($input) . " -> $inputPos \n";
+		}
 		fclose($pipes[2]);
 
 		$status = proc_close ($p);
 		if (!in_array ($status, $this->config["ACCEPT_STATUS"])) {
-			syslog(LOG_CRIT, "Command '$command', status $status, stderr: $err");
+			syslog(LOG_CRIT, "Command '$command', status $status, inputsize: " . strlen($input) . " stderr: $err");
 			return FALSE;
 		}
 		return TRUE;
