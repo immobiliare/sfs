@@ -356,7 +356,7 @@ Using systemd to start sfs-sync
 -------------------
 
 Assuming our configuration named `www` is finished, we may not want to start sfs-sync via systemd.
-Copy `etc/systemd/system/sfs-sync@.service` to `/etc/systemd/system/sfs-sync@.service`. This service file is a templated file which expectes the executeable sfs-sync in `/usr/local/bin` and the configurations in `/etc/sysconfig/sfs/`. You can change these defaults by changing the service file.
+Copy `etc/systemd/system/sfs-sync@.service` to `/etc/systemd/system/sfs-sync@.service`. This service file is a templated file which expectes the executeable sfs-sync in `/usr/local/bin` and the configurations in `/etc/sysconfig/sfs/`. You can change these defaults by changing the service file. On Debian systems change this to `/etc/defaults/sfs`.
 Copy your configuration file `www.php` to the location stated in the service file (`/etc/sysconfig/sfs/` by default).
 
 In order to start your configuration with systemd, type
