@@ -174,12 +174,12 @@ Sync daemon component
 
 Prerequisites
 --------------------
-Install php, if not already present.
+Install commandline version of php, if not already present.
 
-Make sure you have installed php together with:
-- php-sysvmsg
-- php-sysvsem
-- php-sysvshm
+Make sure you have installed php together with these extensions, which might be included in your php-cli installation:
+- sysvmsg
+- sysvsem
+- sysvshm
 
 Check the configuration directive `disable_functions` of `/etc/php.ini` for occurences of
 - proc_open
@@ -197,16 +197,15 @@ Installation
 In this setup we're going to run the sync daemon only on the central node.
 You can run the sync daemon using rsync over ssh or use the plain rsync transfer in trusted environments.
 
-First copy the file `sfs-sync.php` into the directory `/usr/local/bin`.
-
 If you want to use systemd to start the sync-daemon at system startup, copy the contents of `etc` to your systems etc, by running `cp -R etc/ /etc/`.
+The systemd file assumes you have installed `sfs-sync.php` in `/usr/local/bin`. Copy the to this location, or change the path according to your needs if you want to use systemd to start sfs-sync.
 Our configuration files are located in `etc/sysconfig/sfs/`. We provide two example configs, one for plain rsync, and one usings rsync over ssh.
 
 
 Configuring sfs-sync with plain rsync-transfer on the central node
 --------------------
 
-Use `etc/sysconfig/sfs/config.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and change only the following lines:
+Use `etc/sysconfig/sfs/config.php.sample` copy it to `www.php` and change only the following lines:
 
 ```
 "NODES" => array(
@@ -222,7 +221,7 @@ IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
 Now we can start it via a direct call:
 
 ```
-$ sfs-sync -c /etc/sysconfig/sfs/www.php -p /var/run/www.pid
+$ sfs-sync -c www.php -p /var/run/www.pid
 ```
 
 You will notice an error, that `/mnt/data/.sfs.mounted` does not exist. The sfs-sync checks periodically for this file: if it does not exist, for safeness the sync is suspended until the file reappears:
@@ -291,7 +290,7 @@ Find more about the implementation in the [DETAILS](DETAILS.md) page.
 Configuring sfs-sync with ssh-rsync-transfer on the central node
 --------------------
 
-Use `etc/sysconfig/sfs/config-ssh.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and and change only the following lines:
+Use `etc/sysconfig/sfs/config-ssh.php.sample` copy it to `www.php` and change only the following lines:
 
 ```
         "NODES" => array(
@@ -309,7 +308,7 @@ IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
 Now we can start it via a direct call:
 
 ```
-$ sfs-sync -c /etc/sysconfig/sfs/www.php -p /var/run/www.pid
+$ sfs-sync -c www.php -p /var/run/www.pid
 ```
 
 You will notice an error, that `/mnt/data/.sfs.mounted` does not exist. The sfs-sync checks periodically for this file: if it does not exist, for safeness the sync is suspended until the file reappears:
@@ -356,7 +355,11 @@ This will prevent ssh to disconnect from the other nodes. The connection is kept
 Using systemd to start sfs-sync
 -------------------
 
-Assuming our configuration named `www` is finished, we may not want to start sfs-sync via systemd. We can do this, by calling
+Assuming our configuration named `www` is finished, we may not want to start sfs-sync via systemd.
+Copy `etc/systemd/system/sfs-sync@.service` to `/etc/systemd/system/sfs-sync@.service`. This service file is a templated file which expectes the executeable sfs-sync in `/usr/local/bin` and the configurations in `/etc/sysconfig/sfs/`. You can change these defaults by changing the service file.
+Copy your configuration file `www.php` to the location stated in the service file (`/etc/sysconfig/sfs/` by default).
+
+In order to start your configuration with systemd, type
 
 ```
 $ systemctl start sfs-sync@www

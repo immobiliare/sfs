@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/usr/bin/env php
 <?php
 
 /*
@@ -746,7 +746,7 @@ class Sync {
 		);
 
 		//we don't need the output of sync in normal operation mode, just print it in debug mode
-		if(!empty($this->config["LOG_DEBUG"])){
+		if(empty($this->config["LOG_DEBUG"])){
 			$desc[1] = array("file", "/dev/null", "w");
 		}
 
