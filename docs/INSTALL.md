@@ -206,48 +206,15 @@ Our configuration files are located in `etc/sysconfig/sfs/`. We provide two exam
 Configuring sfs-sync with plain rsync-transfer on the central node
 --------------------
 
-Use `etc/sysconfig/sfs/config.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and change the contents according to the following example:
+Use `etc/sysconfig/sfs/config.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and change only the following lines:
 
 ```
-<?php
-$RSYNC_OPTS = "-ltpDcuhRO --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --delete-delay --files-from=%b %s %d";
-$DATADIR="/mnt/data/";
-$BATCHDIR = "/mnt/batches/";
-//drop privileges to user if different from 0, needs a restart if changed
-$UID=0;
-//drop privileges to group if different from 0, needs a restart if changed
-$GID=0;
-
-$CONFIG = array(
-"SYNC_DATA_NOREC" => "rsync -d --no-r $RSYNC_OPTS",
-"SYNC_DATA_REC" => "rsync -r $RSYNC_OPTS",
-"PULL_BATCHES" => "rsync -acduhRO --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d",
-"ACCEPT_STATUS" => array(0, 24),
 "NODES" => array(
   "node2" => array("DATA" => "rsync://node2:8173/data/",
                    "BATCHES" => "rsync://node2:8173/batches/"),
   "node3" => array("DATA" => "rsync://node3:8173/data/",
                    "BATCHES" => "rsync://node3:8173/batches/")
 ),
-
-"PUSHPROCS" => 4,
-"PUSHCOUNT" => 10,
-"PULLCOUNT" => 3,
-
-"BULK_OLDER_THAN" => 60,
-"BULK_MAX_BATCHES" => 100,
-
-"DATADIR" => $DATADIR,
-"BATCHDIR" => "/mnt/batches",
-"CHECKFILE" => DATADIR.".sfs.mounted",
-"SCANTIME" => 1,
-"FAILTIME" => 10,
-"LOG_IDENT" => "sfs-sync(%n)",
-"LOG_OPTIONS" => LOG_PID|LOG_CONS|LOG_PERROR,
-"LOG_FACILITY" => LOG_DAEMON,
-"LOG_DEBUG" => false,
-"DRYRUN" => false
-);
 ```
 
 IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
@@ -324,24 +291,9 @@ Find more about the implementation in the [DETAILS](DETAILS.md) page.
 Configuring sfs-sync with ssh-rsync-transfer on the central node
 --------------------
 
-Use `etc/sysconfig/sfs/config-ssh.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and change the contents according to the following example:
+Use `etc/sysconfig/sfs/config-ssh.php.sample` copy it to `/etc/sysconfig/sfs/www.php` and and change only the following lines:
 
 ```
-<?php
-$RSYNC_OPTS = "-ltpDcuhRO --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --delete-delay --files-from=%b %s %d";
-$DATADIR="/mnt/data/";
-$BATCHDIR = "/mnt/batches/";
-//drop privileges to user if different from 0, needs a restart if changed
-$UID=0;
-//drop privileges to group if different from 0, needs a restart if changed
-$GID=0;
-$RSYNC = 'rsync -e ssh';
-
-$CONFIG = array(
-        "SYNC_DATA_NOREC" => $RSYNC . '-d --no-r ' . $RSYNC_OPTS,
-        "SYNC_DATA_REC" => $RSYNC . ' -r ' . $RSYNC_OPTS,
-        "PULL_BATCHES" => $RSYNC . " -acduhO --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d", // comment to disable pull
-        "ACCEPT_STATUS" => array(0, 24), // 24 = Partial transfer due to vanished source files (rsync)
         "NODES" => array(
                 "node2" => array("DATA" => 'node2:' . $DATADIR,
                         "BATCHES" => 'node2:' . $BATCHDIR
@@ -350,24 +302,6 @@ $CONFIG = array(
                         "BATCHES" => 'node3:' . $BATCHDIR
                 ),
         ),
-"PUSHPROCS" => 4,
-"PUSHCOUNT" => 10,
-"PULLCOUNT" => 3,
-
-"BULK_OLDER_THAN" => 60,
-"BULK_MAX_BATCHES" => 100,
-
-"DATADIR" => $DATADIR,
-"BATCHDIR" => $BATCHDIR,
-"CHECKFILE" => DATADIR.".sfs.mounted",
-"SCANTIME" => 1,
-"FAILTIME" => 10,
-"LOG_IDENT" => "sfs-sync(%n)",
-"LOG_OPTIONS" => LOG_PID|LOG_CONS|LOG_PERROR,
-"LOG_FACILITY" => LOG_DAEMON,
-"LOG_DEBUG" => false,
-"DRYRUN" => false
-);
 ```
 
 IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
