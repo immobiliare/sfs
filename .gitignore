@@ -1,0 +1,5 @@
+fuse/sfs
+*~
+*.deb
+fuse/*.o
+fuse/*/*.o
