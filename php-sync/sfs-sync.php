@@ -553,9 +553,9 @@ class Sync {
 				}
 				list($node, $batches) = $message;
 				$dir = $this->config["BATCHDIR"]."/pull/$node";
-		if(!is_dir($dir)){
-			mkdir ($dir, 0777, TRUE);
-		}
+				if(!is_dir($dir)){
+					mkdir ($dir, 0777, TRUE);
+				}
 
 		if (!$this->syncDataBatch ($node, $batches, "pull")) {
 					msg_send ($this->queue, $this->MSG_RESULT, array($node, "fail"));
@@ -696,7 +696,7 @@ class Sync {
 			// read batch contents
 			foreach ($batches as $batch) {
 				$curBatchFile = "$dir/$batch";
-				$tmp = explode("\n",trim(file_get_contents ($curBatchFile)));
+				$tmp = array_merge($tmp, explode("\n", trim(file_get_contents($curBatchFile))));
 			}
 			//if this will generate one transaction, we don't need duplicates & the order should not
 			$input = implode("\n", array_unique($tmp)) . "\n";
@@ -704,11 +704,10 @@ class Sync {
 
 		$nodecfg = $this->config["NODES"][$node];
 
-		if ($batchesType == "rec") {
-			$command = !empty($nodecfg["SYNC_DATA_REC"]) ? $nodecfg["SYNC_DATA_REC"] : $this->config["SYNC_DATA_REC"];
-		} else {
-			$command = !empty($nodecfg["SYNC_DATA_NOREC"]) ? $nodecfg["SYNC_DATA_NOREC"] : $this->config["SYNC_DATA_NOREC"];
-		}
+		$command = ($batchesType == "rec" ?
+				(empty($nodecfg["SYNC_DATA_REC"]) ? $this->config["SYNC_DATA_REC"] : $nodecfg["SYNC_DATA_REC"]) :
+				(empty($nodecfg["SYNC_DATA_NOREC"]) ? $this->config["SYNC_DATA_NOREC"] : $nodecfg["SYNC_DATA_NOREC"])
+			);
 
 		$subst = array ("%b" => $batchFile,
 						"%s" => ($mode == "push") ? $this->config["DATADIR"] : $nodecfg["DATA"],
@@ -734,7 +733,7 @@ class Sync {
 			$command = str_replace ($k, escapeshellcmd($v), $command);
 		}
 		if (!empty($this->config["LOG_DEBUG"])) {
-			syslog(LOG_DEBUG, "Executing command $command");
+			syslog(LOG_DEBUG, "Executing command $command inputsize:".  ($input?strlen($input):0));
 		}
 
 		if ($this->config["DRYRUN"]) {
@@ -758,24 +757,26 @@ class Sync {
 		// spawn the process
 		$p = proc_open($command, $desc, $pipes);
 		if (!is_resource ($p)) {
+			syslog(LOG_WARNING,"unable to execute ".$command);
 			return FALSE;
 		}
-		stream_set_blocking($pipes[2], 0);
-		// write stdin
-		if ($input) {
+		if($input){
 			stream_set_blocking($pipes[0], 0);
 		}
+		stream_set_blocking($pipes[2], 0);
+
+		$tx = $input ? true : false;
 		$err = '';
 		$inputLen = $input ? strlen($input) : 0;
 		$inputPos = 0;
-		while($inputLen || feof($pipes[2])){
-			if($inputLen && $inputPos != $inputLen){
+		$tmp = '';
+		while(($status = proc_get_status($p)) && $status['running'] == true){
+			if($tx && $inputPos != $inputLen){
 				$inputPos+=fwrite($pipes[0], substr($input, $inputPos, 8192));
-			} elseif($inputLen) {
-				$inputLen = false;
+			} elseif($tx) {
+				$tx = false;
 				fclose($pipes[0]);
 			}
-			// read stderr
 			$tmp = fgets($pipes[2], 1024);
 			//wait if nothing read - but only if we don't have data to write
 			if(!$inputLen && strlen($tmp) === 0){
@@ -785,16 +786,19 @@ class Sync {
 			}
 		}
 		if(strlen($input) != $inputPos){
-			echo 'WARNING LENGTH MISSMATCH ' . strlen($input) . " -> $inputPos \n";
+			syslog(LOG_CRIT, 'WARNING LENGTH MISSMATCH ' . strlen($input) . " -> $inputPos ");
 		}
-		fclose($pipes[2]);
+		foreach($pipes as $pipe){
+			if(is_resource($pipe)){
+				fclose($pipe);
+			}
+		}
 
-		$status = proc_close ($p);
-		if (!in_array ($status, $this->config["ACCEPT_STATUS"])) {
-			syslog(LOG_CRIT, "Command '$command', status $status, inputsize: " . strlen($input) . " stderr: $err");
-			return FALSE;
+		if (in_array ($status['exitcode'], $this->config["ACCEPT_STATUS"])) {
+			return TRUE;
 		}
-		return TRUE;
+		syslog(LOG_CRIT, "Command '$command', status ".$status['exitcode'].", inputsize: " . strlen($input) . " stderr: $err");
+		return FALSE;
 	}
 }
 
