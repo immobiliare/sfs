@@ -314,17 +314,33 @@ class Sync {
 				continue;
 			}
 
-			$allBatches = glob($dir . '/*_*.batch');
-			if(empty($allBatches)){
-				//nothing to do
+			$hBatchDir = opendir($dir);
+			if($hBatchDir === FALSE){
+				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in " . $this->config["FAILTIME"] . " seconds");
+				$this->setFailing($node);
+				$tasks[] = array();
 				continue;
 			}
 
 			$nodecfg = $this->config["NODES"][$node];
 			$bulkMaxBatches = !empty($nodecfg["BULK_MAX_BATCHES"]) ? $nodecfg["BULK_MAX_BATCHES"] : $this->config["BULK_MAX_BATCHES"];
 
-			$batches = array_map('basename', array_splice($allBatches, 0, $bulkMaxBatches * 2));
-			unset($allBatches);
+			$batches = array();
+			for($nBatch = 0; $nBatch < $bulkMaxBatches * 2; $nBatch++){
+				$batchName = readdir($hBatchDir);
+
+				if($batchName === FALSE){
+
+					break;
+				}
+				$batches[] = $batchName;
+			}
+			closedir($hBatchDir);
+
+			if(empty($batches)){
+				//nothing to do
+				continue;
+			}
 
 			$rowno = 0;
 			$match = $bulk = array();
@@ -440,7 +456,7 @@ class Sync {
 	/* enqueue process */
 	public function linkLocalBatches () {
 		$dir = $this->config["BATCHDIR"];
-		$batches = scandir ($dir, 0); // sort ascending
+		$batches = scandir ($dir, 0); // php 5.4: SCANDIR_SORT_ASCENDING
 		if ($batches === FALSE) {
 			syslog(LOG_CRIT, "Cannot scan $dir, will retry in ".$this->config["FAILTIME"]." seconds");
 			return FALSE;
