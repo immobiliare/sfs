@@ -253,6 +253,9 @@ int sfs_link(const char *path, const char *newpath) {
 		retstat = -errno;
 	} else {
 		batch_file_event (newpath, "norec");
+		// add old path as event too to ensure that hardlinks are
+		// created on targets when rsync -H is used
+		batch_file_event(path, "norec");
 	}
     
     return retstat;
