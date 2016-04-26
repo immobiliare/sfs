@@ -258,7 +258,7 @@ int sfs_link(const char *path, const char *newpath) {
 	} else {
 		batch_file_event(newpath, "norec");
 		//add old path as event too, this will ensure on target machine with rsync -h the hardlink is created as well
-		batch_file_event(fpath, "norec");
+		batch_file_event(path, "norec");
 	}
 
 	return retstat;
