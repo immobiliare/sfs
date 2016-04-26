@@ -257,6 +257,8 @@ int sfs_link(const char *path, const char *newpath) {
 		retstat = -errno;
 	} else {
 		batch_file_event(newpath, "norec");
+		//add old path as event too, this will ensure on target machine with rsync -h the hardlink is created as well
+		batch_file_event(fpath, "norec");
 	}
 
 	return retstat;
@@ -1121,12 +1123,12 @@ int main(int argc, char **argv) {
 		perror("[main] state calloc failed");
 		abort();
 	}
-	
+
 	openlog ("sfs-startup", LOG_PID|LOG_CONS|LOG_PERROR, LOG_DAEMON);
-	
+
 	struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
 	fuse_opt_parse (&args, state, sfs_opts, sfs_opt_handler);
-	
+
 	if (!state->rootdir) {
 		sfs_usage();
 	}
