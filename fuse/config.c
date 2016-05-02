@@ -161,10 +161,6 @@ static int ini_handler (void* userdata, const char* section, const char* name,
 }
 
 static int config_check (SfsState* state) {
-	if (!state->pid_path) {
-		syslog(LOG_ERR, "[config] sfs/pid_path must be specified");
-		goto error;
-	}
 	if (!state->batch_dir) {
 		syslog(LOG_ERR, "[config] sfs/batch_dir must be specified");
 		goto error;

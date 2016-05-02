@@ -839,16 +839,18 @@ void *sfs_init(struct fuse_conn_info *conn) {
 
 	// write pid file
 	const char* pidpath = state->pid_path;
-	FILE *pidfile = fopen (pidpath, "w");
-	if (!pidfile) {
-		syslog(LOG_ERR, "[main] cannot open %s for write: %s", pidpath, strerror (errno));
-	} else {
-		if (!fprintf(pidfile, "%d\n", state->pid)) {
-			syslog(LOG_ERR, "[main] can't write pid %d to %s: %s.\n",
-				   state->pid, pidpath, strerror (errno));
+	if (state->pid_path) {
+		FILE *pidfile = fopen (pidpath, "w");
+		if (!pidfile) {
+			syslog(LOG_ERR, "[main] cannot open %s for write: %s", pidpath, strerror (errno));
+		} else {
+			if (!fprintf(pidfile, "%d\n", state->pid)) {
+				syslog(LOG_ERR, "[main] can't write pid %d to %s: %s.\n",
+					   state->pid, pidpath, strerror (errno));
+			}
+			fflush (pidfile);
+			fclose (pidfile);
 		}
-		fflush (pidfile);
-		fclose (pidfile);
 	}
 
 	batch_start_timer (state);
