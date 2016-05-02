@@ -1,3 +1,18 @@
+sfs 1.4.1
+===============
+
+* fuse:
+  - pid_path is now optional
+  - fixed compilation on Debian Lenny
+  - support fstab mount
+  - prettier mount output
+  - support dropping privileges to uid and gid
+  - create recursive batches only when directories are renamed
+
+* php-sync:
+  - allow per-node BULK_MAX_BATCHES and rsync commands
+  - do not scan the whole batches directory
+
 sfs 1.4.0
 ===============
 
