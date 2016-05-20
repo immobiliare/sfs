@@ -1245,7 +1245,7 @@ int main(int argc, char **argv) {
 	closelog();
 
 	//add general options
-	fuse_opt_add_arg(&args, "-okernel_cache,use_ino");
+	fuse_opt_add_arg(&args, "-ouse_ino");
 	// set pretty fsname and fstype
 	char buf[1024];
 	snprintf(buf, sizeof buf, "-ofsname=%s", state->rootdir);
