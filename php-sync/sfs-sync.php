@@ -1,6 +1,5 @@
 #!/usr/bin/env php
 <?php
-
 /*
  *  sync.php - SFS Asynchronous filesystem replication
  *
@@ -24,312 +23,321 @@
 
 declare(ticks = 1);
 
-error_reporting (E_ALL & ~E_STRICT);
-ini_set ("display_errors", 1);
-ini_set ("error_log", "syslog");
+error_reporting(E_ALL & ~E_STRICT);
+ini_set('display_errors', 1);
+ini_set('error_log', 'syslog');
 
 define('ESTIMATED_BATCH_NAME_LENGTH', 150);
 
-function sync_shutdown () {
+function sync_shutdown(){
 	global $sync;
-	$sync->shutdown ();
+	$sync->shutdown();
 	exit(0);
 }
 
-class Sync {
+class Sync{
 	public $MSG_PUSH = 1;
 	public $MSG_PULL = 2;
 	public $MSG_RESULT = 3;
 
-	public function __construct ($configPath, $pidPath) {
+	public function __construct($configPath, $pidPath){
 		$this->configPath = $configPath;
 		$this->pidPath = $pidPath;
-		$this->nodeTimeout = array ();
+		$this->nodeTimeout = [];
 
 		global $CONFIG;
 		require $this->configPath;
-		if (!$this->setConfig ($CONFIG)) {
+		if(!$this->setConfig($CONFIG)){
 			echo "Could not load config, see syslog\n";
 			return;
 		}
-		$this->reopenLog ("main");
+		$this->reopenLog('main');
 	}
 
-	public function shutdown () {
-		if (!empty ($this->didShutdown)) {
+	public function shutdown(){
+		if(!empty($this->didShutdown)){
 			return;
 		}
-		$this->didShutdown = TRUE;
-		if ($this->pidPath) {
+		$this->didShutdown = true;
+		if($this->pidPath){
 			unlink($this->pidPath);
 		}
-		$this->removeShm ();
-		syslog(LOG_NOTICE, "Shutdown successful");
+		$this->removeShm();
+		syslog(LOG_NOTICE, 'Shutdown successful');
 	}
 
 	/* all processes */
-	public function setConfig ($config, $subident=null) {
+
+	public function setConfig($config, $subident = null){
 		// display messages only in sched process
-		if (empty($config["SYNC_DATA_REC"]) || empty($config["SYNC_DATA_NOREC"])) {
-			if ($subident == "sched") {
+		if(empty($config['SYNC_DATA_REC']) || empty($config['SYNC_DATA_NOREC'])){
+			if($subident == 'sched'){
 				// display the message only once in the syslog in the parent process
-				syslog(LOG_CRIT, "Sync data command not configured");
+				syslog(LOG_CRIT, 'Sync data command not configured');
 			}
-			return FALSE;
+			return false;
 		}
 
-		if (!empty ($this->config) && array_keys($this->config["NODES"]) != array_keys($config["NODES"])) {
-			if ($subident == "sched") {
+		if(!empty($this->config) && array_keys($this->config['NODES']) != array_keys($config['NODES'])){
+			if($subident == 'sched'){
 				// display
-				syslog(LOG_CRIT, "Nodes cannot change at runtime");
+				syslog(LOG_CRIT, 'Nodes cannot change at runtime');
 			}
-			return FALSE;
+			return false;
 		}
 
-		if (empty ($this->config["PULL_BATCHES"])) {
-			if ($subident == "sched") {
+		if(empty($this->config['PULL_BATCHES'])){
+			if($subident == 'sched'){
 				// display the message only once in the syslog in the parent process
-				syslog(LOG_WARNING, "Pull batches command not configured");
+				syslog(LOG_WARNING, 'Pull batches command not configured');
 			}
 		}
 
 		$this->config = $config;
-		return TRUE;
+		return true;
 	}
 
 	/* all processes */
-	public function reopenLog ($subident="") {
-		closelog ();
-		$ident = str_replace ("%n", $subident, $this->config["LOG_IDENT"]);
-		if (version_compare(phpversion(), '5.5.0', '>=')) {
-			cli_set_process_title ($ident);
+
+	public function reopenLog($subident = ''){
+		closelog();
+		$ident = str_replace('%n', $subident, $this->config['LOG_IDENT']);
+		if(version_compare(phpversion(), '5.5.0', '>=')){
+			cli_set_process_title($ident);
 		}
-		openlog($ident, $this->config["LOG_OPTIONS"], $this->config["LOG_FACILITY"]);
+		openlog($ident, $this->config['LOG_OPTIONS'], $this->config['LOG_FACILITY']);
 	}
 
 	/* all processes */
-	public function reloadConfig ($subident) {
+
+	public function reloadConfig($subident){
 		global $CONFIG;
 		$curConfig = $CONFIG;
-		try {
+		try{
 			require $this->configPath;
-			if ($curConfig == $CONFIG) {
+			if($curConfig == $CONFIG){
 				return;
 			}
 
-			if (!$this->setConfig ($CONFIG, $subident)) {
+			if(!$this->setConfig($CONFIG, $subident)){
 				return;
 			}
 
-			$this->reopenLog ($subident);
-			syslog(LOG_NOTICE, "Configuration reloaded successfully");
-		} catch (Exception $e) {
-			syslog(LOG_WARNING, "Error reloading config: ".$e->getMessage ());
+			$this->reopenLog($subident);
+			syslog(LOG_NOTICE, 'Configuration reloaded successfully');
+		} catch (Exception $e){
+			syslog(LOG_WARNING, 'Error reloading config: ' . $e->getMessage());
 		}
 	}
 
 	/* main process */
-	public function setupShmKeys () {
-		$tempnam = tempnam("/tmp", "php-sync");
+
+	public function setupShmKeys(){
+		$tempnam = tempnam('/tmp', 'php-sync');
 		$num = 1;
 		$this->queueKey = ftok($tempnam, $num++);
-		$this->semKeys = array();
-		foreach (array_keys ($this->config["NODES"]) as $node) {
+		$this->semKeys = [];
+		foreach(array_keys($this->config['NODES']) as $node){
 			$this->semKeys[$node] = ftok($tempnam, $num++);
 		}
 		unlink($tempnam);
 	}
 
 	/* main process */
-	public function setupShm () {
-		$this->queue = msg_get_queue ($this->queueKey);
-		if (msg_set_queue($this->queue, array('msg_qbytes' => ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"])) === FALSE) {
-			syslog(LOG_CRIT, "Error adjusting queue message size");
+
+	public function setupShm(){
+		$this->queue = msg_get_queue($this->queueKey);
+		if(msg_set_queue($this->queue, ['msg_qbytes' => ESTIMATED_BATCH_NAME_LENGTH * $this->config['BULK_MAX_BATCHES']]) === false){
+			syslog(LOG_CRIT, 'Error adjusting queue message size');
 		}
 
-		$this->sems = array();
-		foreach (array_keys ($this->config["NODES"]) as $node) {
-			$this->sems[$node] = sem_get ($this->semKeys[$node]);
+		$this->sems = [];
+		foreach(array_keys($this->config['NODES']) as $node){
+			$this->sems[$node] = sem_get($this->semKeys[$node]);
 		}
 	}
 
-	public function removeShm () {
-		if (!empty ($this->queue)) {
-			if (!msg_remove_queue ($this->queue)) {
-				syslog(LOG_WARNING, "Error removing queue key ".$this->queueKey);
+	public function removeShm(){
+		if(!empty($this->queue)){
+			if(!msg_remove_queue($this->queue)){
+				syslog(LOG_WARNING, 'Error removing queue key ' . $this->queueKey);
 			}
 			$this->queue = NULL;
 		}
 	}
 
 	/* all processes */
-	public function checkFile () {
-		if (empty ($this->config["CHECKFILE"])) {
-			syslog(LOG_CRIT, "No CHECKFILE configured");
-			return FALSE;
+
+	public function checkFile(){
+		if(empty($this->config['CHECKFILE'])){
+			syslog(LOG_CRIT, 'No CHECKFILE configured');
+			return false;
 		}
 
-		if (!file_exists ($this->config["CHECKFILE"])) {
-			syslog(LOG_CRIT, "Checkfile ".$this->config["CHECKFILE"]." does not exist");
-			return FALSE;
+		if(!file_exists($this->config['CHECKFILE'])){
+			syslog(LOG_CRIT, 'Checkfile ' . $this->config['CHECKFILE'] . ' does not exist');
+			return false;
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	/* manage timeout of nodes */
-	public function setWaiting ($node) {
-		$this->nodeTimeout[$node] = time()+$this->config["SCANTIME"];
+
+	public function setWaiting($node){
+		$this->nodeTimeout[$node] = time() + $this->config['SCANTIME'];
 	}
 
-	public function setFailing ($node) {
-		$this->nodeTimeout[$node] = time()+$this->config["FAILTIME"];
+	public function setFailing($node){
+		$this->nodeTimeout[$node] = time() + $this->config['FAILTIME'];
 	}
 
-	public function isReady ($node) {
-		if (!empty ($this->nodeTimeout[$node]) && time() <= $this->nodeTimeout[$node]) {
-			return FALSE;
-		} else {
-			$this->clearTimeout ($node);
-			return TRUE;
+	public function isReady($node){
+		if(!empty($this->nodeTimeout[$node]) && time() <= $this->nodeTimeout[$node]){
+			return false;
 		}
+		$this->clearTimeout($node);
+		return true;
 	}
 
-	public function clearTimeout ($node) {
-		unset ($this->nodeTimeout[$node]);
+	public function clearTimeout($node){
+		unset($this->nodeTimeout[$node]);
 	}
 
 	/* push and pull procs */
-	public function doSleep ($time) {
-		$usec = (int)($time*1000000);
+
+	public function doSleep($time){
+		$usec = (int) ($time * 1000000);
 		usleep($usec);
 	}
 
 	/* main process */
-	public function run () {
-		register_shutdown_function (array ($this, "shutdown"));
 
-		if ($this->config["DRYRUN"]) {
-			syslog(LOG_NOTICE, "Started in dry-run mode");
+	public function run(){
+		register_shutdown_function([$this, 'shutdown']);
+
+		if($this->config['DRYRUN']){
+			syslog(LOG_NOTICE, 'Started in dry-run mode');
 		} else {
-			syslog(LOG_NOTICE, "Started");
+			syslog(LOG_NOTICE, 'Started');
 		}
 
-		$this->setupShmKeys ();
-		$this->setupShm ();
+		$this->setupShmKeys();
+		$this->setupShm();
 
 		// fork batch creator
-		$pidBatch = pcntl_fork ();
-		if ($pidBatch < 0) {
-			die ("Could not fork batch creator");
-		} else if ($pidBatch == 0) {
+		$pidBatch = pcntl_fork();
+		if($pidBatch < 0){
+			die('Could not fork batch creator');
+		} else if($pidBatch == 0){
 			// child
-			$this->enqueueLoop ();
+			$this->enqueueLoop();
 		}
 
 		// fork puller
-		$pid = pcntl_fork ();
-		if ($pid < 0) {
-			die ("Could not fork puller");
-		} else if ($pid == 0) {
+		$pid = pcntl_fork();
+		if($pid < 0){
+			die('Could not fork puller');
+		} else if($pid == 0){
 			// child
-			$this->pullLoop ("pull");
+			$this->pullLoop('pull');
 			exit(0);
 		}
 
 		// fork pushers
-		for ($i=0; $i < $this->config["PUSHPROCS"]; $i++) {
-			$pid = pcntl_fork ();
-			if ($pid < 0) {
-				die ("Could not fork worker");
-			} else if ($pid == 0) {
+		for($i = 0; $i < $this->config['PUSHPROCS']; $i++){
+			$pid = pcntl_fork();
+			if($pid < 0){
+				die('Could not fork worker');
+			} else if($pid == 0){
 				// child
-				$this->pushLoop("push $i");
+				$this->pushLoop('push ' . $i);
 				exit(0);
 			}
 		}
 
 		// handle signals for clearing shm only in main proc
-		pcntl_signal(SIGINT, "sync_shutdown");
-		pcntl_signal(SIGTERM, "sync_shutdown");
+		pcntl_signal(SIGINT, 'sync_shutdown');
+		pcntl_signal(SIGTERM, 'sync_shutdown');
 
-		$this->schedulerLoop ();
+		$this->schedulerLoop();
 	}
 
 	/* scheduler process */
-	public function schedulerLoop () {
-		$this->nextNodeId = array("push" => 0, "pull" => 0);
-		$this->reopenLog("sched");
-		while (TRUE) {
-			$this->reloadConfig ("sched");
-			if (!$this->checkFile ()) {
-				$this->doSleep($this->config["FAILTIME"]);
+
+	public function schedulerLoop(){
+		$this->nextNodeId = ['push' => 0, 'pull' => 0];
+		$this->reopenLog('sched');
+		while(true){
+			$this->reloadConfig('sched');
+			if(!$this->checkFile()){
+				$this->doSleep($this->config['FAILTIME']);
 				continue;
 			}
 
-			$sleep = $this->config["SCANTIME"];
-			try {
-				$toSchedule = $this->config["PUSHCOUNT"];
-				$rem = $this->scheduleBatches ("push", $toSchedule);
-				if ($rem < $toSchedule) {
+			$sleep = $this->config['SCANTIME'];
+			try{
+				$toSchedule = $this->config['PUSHCOUNT'];
+				$rem = $this->scheduleBatches('push', $toSchedule);
+				if($rem < $toSchedule){
 					// we scheduled something
 					$sleep = 0;
 				}
-				$this->waitComplete ($toSchedule - $rem);
+				$this->waitComplete($toSchedule - $rem);
 
-				$toSchedule = $this->config["PULLCOUNT"];
-				$rem = $this->scheduleBatches ("pull", $toSchedule);
-				if ($rem < $toSchedule) {
+				$toSchedule = $this->config['PULLCOUNT'];
+				$rem = $this->scheduleBatches('pull', $toSchedule);
+				if($rem < $toSchedule){
 					// we scheduled something
 					$sleep = 0;
 				}
-				$this->waitComplete ($toSchedule - $rem);
-			} catch (Exception $e) {
-				syslog(LOG_CRIT, "Scheduler: ".print_r($e, TRUE));
-				$sleep = $this->config["FAILTIME"];
+				$this->waitComplete($toSchedule - $rem);
+			} catch (Exception $e){
+				syslog(LOG_CRIT, 'Scheduler: ' . print_r($e, true));
+				$sleep = $this->config['FAILTIME'];
 			}
 
-			if ($sleep) {
+			if($sleep){
 				$this->doSleep($sleep);
 			}
 		}
 	}
 
-	public function scheduleBatches ($mode, $toSchedule) {
+	public function scheduleBatches($mode, $toSchedule){
 		$curtime = time();
-		$tasks = array ();
-		foreach (array_keys ($this->config["NODES"]) as $node) {
-			if (!$this->isReady ($node)) {
-				$tasks[] = array();
+		$tasks = [];
+		foreach(array_keys($this->config['NODES']) as $node){
+			if(!$this->isReady($node)){
+				$tasks[] = [];
 				continue;
 			}
 
-			$dir = $this->config["BATCHDIR"]."/$mode/$node";
-			if (!is_dir ($dir)) {
-				mkdir ($dir, 0777, TRUE);
+			$dir = $this->config['BATCHDIR'] . '/' . $mode . '/' . $node;
+			if(!is_dir($dir)){
+				mkdir($dir, 0777, true);
 			}
 			if(!is_dir($dir)){
-				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in ".$this->config["FAILTIME"]." seconds");
-				$this->setFailing ($node);
+				syslog(LOG_CRIT, 'Cannot opendir ' . $dir . ', will retry in ' . $this->config['FAILTIME'] . ' seconds');
+				$this->setFailing($node);
 				continue;
 			}
 
 			$hBatchDir = opendir($dir);
-			if($hBatchDir === FALSE){
-				syslog(LOG_CRIT, "Cannot opendir $dir, will retry in " . $this->config["FAILTIME"] . " seconds");
+			if($hBatchDir === false){
+				syslog(LOG_CRIT, 'Cannot opendir ' . $dir . ', will retry in ' . $this->config['FAILTIME'] . ' seconds');
 				$this->setFailing($node);
-				$tasks[] = array();
+				$tasks[] = [];
 				continue;
 			}
 
-			$nodecfg = $this->config["NODES"][$node];
-			$bulkMaxBatches = !empty($nodecfg["BULK_MAX_BATCHES"]) ? $nodecfg["BULK_MAX_BATCHES"] : $this->config["BULK_MAX_BATCHES"];
+			$nodecfg = $this->config['NODES'][$node];
+			$bulkMaxBatches = !empty($nodecfg['BULK_MAX_BATCHES']) ? $nodecfg['BULK_MAX_BATCHES'] : $this->config['BULK_MAX_BATCHES'];
 
-			$batches = array();
+			$batches = [];
 			for($nBatch = 0; $nBatch < $bulkMaxBatches * 2; $nBatch++){
 				$batchName = readdir($hBatchDir);
 
-				if($batchName === FALSE){
+				if($batchName === false){
 
 					break;
 				}
@@ -343,30 +351,30 @@ class Sync {
 			}
 
 			$rowno = 0;
-			$match = $bulk = array();
+			$match = $bulk = [];
 			$bulkCount = 0;
 			$lastType = null;
-			foreach ($batches as $batch) {
-				if (!preg_match ('/_([^_\.]+)\.batch$/', $batch, $match)) {
+			foreach($batches as $batch){
+				if(!preg_match('/_([^_\.]+)\.batch$/', $batch, $match)){
 					continue;
 				}
 				$curType = $match[1];
 
-				$batchFile = "$dir/$batch";
-				$mtime = filemtime ($batchFile);
-				if ($mtime === FALSE ||
-					$curtime - $mtime < $this->config["BULK_OLDER_THAN"] ||
+				$batchFile = $dir . '/' . $batch;
+				$mtime = filemtime($batchFile);
+				if($mtime === false ||
+					$curtime - $mtime < $this->config['BULK_OLDER_THAN'] ||
 					$bulkCount > $bulkMaxBatches ||
 					($lastType && $curType != $lastType) // rec != norec
-				) {
+				){
 					# flush bulk
-					if ($mtime === FALSE) {
-						syslog(LOG_WARN, "Cannot get mtime of $batchFile, assuming new bulk");
+					if($mtime === false){
+						syslog(LOG_WARN, 'Cannot get mtime of ' . $batchFile . ', assuming new bulk');
 					}
-					if ($bulkCount > 0) {
-						$tasks[$rowno++][] = array($node, $bulk);
+					if($bulkCount > 0){
+						$tasks[$rowno++][] = [$node, $bulk];
 					}
-					$bulk = array();
+					$bulk = [];
 					$bulkCount = 0;
 					$lastType = null;
 					break; // we don't send more than one bulk per node, anyway
@@ -377,30 +385,30 @@ class Sync {
 				$lastType = $curType;
 			}
 
-			if ($bulkCount > 0) {
-				$tasks[$rowno++][] = array($node, $bulk);
+			if($bulkCount > 0){
+				$tasks[$rowno++][] = [$node, $bulk];
 			}
 		}
 
 		$rowno = 0;
 		$taskCnt = count($tasks);
-		$scheduledNodes = array ();
+		$scheduledNodes = [];
 		// schedule the same node only once to ensure the order of batches
-		while ($toSchedule > 0 && $rowno < $taskCnt) {
+		while($toSchedule > 0 && $rowno < $taskCnt){
 			$row = $tasks[$rowno];
 			$rowCnt = count($row);
 			/* count($row) should be the number of nodes,
 			 * however we use count($row) for safety */
-			for ($i=0; $i < $rowCnt && $toSchedule > 0; $i++) {
+			for($i = 0; $i < $rowCnt && $toSchedule > 0; $i++){
 				$nodeId = $this->nextNodeId[$mode] % $rowCnt;
-				$this->nextNodeId[$mode]++;
-				if (!empty ($row[$nodeId])) {
+				$this->nextNodeId[$mode] ++;
+				if(!empty($row[$nodeId])){
 					$task = $row[$nodeId];
-					if (!in_array ($task[0], $scheduledNodes)) {
-						$msgtype = $mode == "push" ? $this->MSG_PUSH : $this->MSG_PULL;
+					if(!in_array($task[0], $scheduledNodes)){
+						$msgtype = $mode === 'push' ? $this->MSG_PUSH : $this->MSG_PULL;
 
-						if (!msg_send ($this->queue, $msgtype, $task)) {
-							syslog(LOG_CRIT, "Error scheduling task ".print_r($task, true));
+						if(!msg_send($this->queue, $msgtype, $task)){
+							syslog(LOG_CRIT, 'Error scheduling task ' . print_r($task, true));
 						} else {
 							$toSchedule--;
 							$scheduledNodes[] = $task[0];
@@ -415,15 +423,15 @@ class Sync {
 		return $toSchedule;
 	}
 
-	public function waitComplete ($n) {
+	public function waitComplete($n){
 		$msgtype = $message = $errorcode = '';
-		while ($n > 0) {
-			if (!msg_receive ($this->queue, $this->MSG_RESULT, $msgtype, 4096, $message, true, 0, $errorcode)) {
-				syslog(LOG_CRIT, "Error waiting completion from queue: ".posix_strerror($errorcode));
+		while($n > 0){
+			if(!msg_receive($this->queue, $this->MSG_RESULT, $msgtype, 4096, $message, true, 0, $errorcode)){
+				syslog(LOG_CRIT, 'Error waiting completion from queue: ' . posix_strerror($errorcode));
 			} else {
 				list($node, $res) = $message;
-				if (((string) $res) == "fail") {
-					$this->setFailing ($node);
+				if(((string) $res) == "fail"){
+					$this->setFailing($node);
 				}
 				$n--;
 			}
@@ -431,350 +439,359 @@ class Sync {
 	}
 
 	/* batch queue loop */
-	public function enqueueLoop () {
-		$this->reopenLog ("batchq");
-		while (TRUE) {
-			$this->reloadConfig ("batchq");
-			if (!$this->checkFile ()) {
-				$this->doSleep($this->config["FAILTIME"]);
+
+	public function enqueueLoop(){
+		$this->reopenLog('batchq');
+		while(true){
+			$this->reloadConfig('batchq');
+			if(!$this->checkFile()){
+				$this->doSleep($this->config['FAILTIME']);
 				continue;
 			}
 
-			try {
-				if (!$this->linkLocalBatches () || !$this->pullRemoteBatches ()) {
-					$this->doSleep($this->config["FAILTIME"]);
+			try{
+				if(!$this->linkLocalBatches() || !$this->pullRemoteBatches()){
+					$this->doSleep($this->config['FAILTIME']);
 				} else {
-					$this->doSleep($this->config["SCANTIME"]);
+					$this->doSleep($this->config['SCANTIME']);
 				}
-			} catch (Exception $e) {
-				syslog(LOG_CRIT, "Enqueue loop: ".print_r($e, TRUE));
-				$this->doSleep($this->config["FAILTIME"]);
+			} catch (Exception $e){
+				syslog(LOG_CRIT, 'Enqueue loop: ' . print_r($e, true));
+				$this->doSleep($this->config['FAILTIME']);
 			}
 		}
 	}
 
 	/* enqueue process */
-	public function linkLocalBatches () {
-		$dir = $this->config["BATCHDIR"];
-		$batches = scandir ($dir, 0); // php 5.4: SCANDIR_SORT_ASCENDING
-		if ($batches === FALSE) {
-			syslog(LOG_CRIT, "Cannot scan $dir, will retry in ".$this->config["FAILTIME"]." seconds");
-			return FALSE;
+
+	public function linkLocalBatches(){
+		$dir = $this->config['BATCHDIR'];
+		$batches = scandir($dir, 0); // php 5.4: SCANDIR_SORT_ASCENDING
+		if($batches === false){
+			syslog(LOG_CRIT, 'Cannot scan ' . $dir . ', will retry in ' . $this->config['FAILTIME'] . ' seconds');
+			return false;
 		}
 
-		if (empty ($this->config["NODES"])) {
-			return TRUE;
+		if(empty($this->config['NODES'])){
+			return true;
 		}
-		$match = array();
-		foreach ($batches as &$batch) {
-			if (!preg_match ("/^\d+_([^_]+)_.*\.batch$/", $batch, $match)) {
-				/*if(!empty($this->config["LOG_DEBUG"])){
-					syslog(LOG_DEBUG, "batch doesn't match " . $batch);
-				}*/
+		$match = [];
+		foreach($batches as &$batch){
+			if(!preg_match("/^\d+_([^_]+)_.*\.batch$/", $batch, $match)){
+				/* if(!empty($this->config["LOG_DEBUG"])){
+				  syslog(LOG_DEBUG, "batch doesn't match " . $batch);
+				  } */
 				continue;
 			}
 			$batchNode = $match[1];
 
 			// create hard links for each node
-			foreach (array_keys ($this->config["NODES"]) as $node) {
-				if ($batchNode == $node) {
+			foreach(array_keys($this->config['NODES']) as $node){
+				if($batchNode == $node){
 					// do not push to the node where this that was pulled from
 					continue;
 				}
 
-				$nodedir = "$dir/push/$node";
+				$nodedir = $dir . '/push/' . $node;
 				if(!is_dir($nodedir)){
-					mkdir($nodedir, 0777, TRUE);
+					mkdir($nodedir, 0777, true);
 				}
-				while (!file_exists ("$nodedir/$batch") && !link ("$dir/$batch", "$nodedir/$batch")) {
+				while(!file_exists($nodedir . '/' . $batch) && !link($dir . '/' . $batch, $nodedir . '/' . $batch)){
 					syslog(LOG_ALERT, "Error creating link from $dir/$batch to $nodedir/$batch, cannot continue safely");
-					$this->doSleep($this->config["FAILTIME"]);
-					$this->reloadConfig ("batchq");
+					$this->doSleep($this->config['FAILTIME']);
+					$this->reloadConfig('batchq');
 				}
 
-				if (!empty ($this->config["BACKUPBATCHES"])) {
-					$bakdir = $this->config["BACKUPBATCHES"]."/".strftime("%F")."/push/$node/";
-					while (!is_dir ($bakdir) && !mkdir ($bakdir, 0777, TRUE)) {
+				if(!empty($this->config['BACKUPBATCHES'])){
+					$bakdir = $this->config['BACKUPBATCHES'] . '/' . strftime('%F') . '/push/' . $node . '/';
+					while(!is_dir($bakdir) && !mkdir($bakdir, 0777, true)){
 						syslog(LOG_ALERT, "Error creating backup directory $bakdir, cannot continue safely");
-						$this->doSleep($this->config["FAILTIME"]);
-						$this->reloadConfig ("batchq");
+						$this->doSleep($this->config['FAILTIME']);
+						$this->reloadConfig('batchq');
 					}
 
-					while (!file_exists ("$bakdir/$batch") && !link ("$dir/$batch", "$bakdir/$batch")) {
+					while(!file_exists($bakdir . '/' . $batch) && !link($dir . '/' . $batch, $bakdir . '/' . $batch)){
 						syslog(LOG_ALERT, "Error creating link from $dir/$batch to $bakdir/$batch, cannot continue safely");
-						$this->doSleep($this->config["FAILTIME"]);
-						$this->reloadConfig ("batchq");
+						$this->doSleep($this->config['FAILTIME']);
+						$this->reloadConfig('batchq');
 					}
 				}
 			}
 
-			if (!unlink ("$dir/$batch")) {
+			if(!unlink($dir . '/' . $batch)){
 				syslog(LOG_CRIT, "Could not unlink $dir/$batch, will be retried");
 			}
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	/* enqueue process */
-	public function pullRemoteBatches () {
-		foreach (array_keys ($this->config["NODES"]) as $node) {
-			if (!$this->isReady ($node)) {
+
+	public function pullRemoteBatches(){
+		foreach(array_keys($this->config['NODES']) as $node){
+			if(!$this->isReady($node)){
 				continue;
 			}
-			if (!$this->pullBatches ($node)) {
-				$this->setFailing ($node);
+			if(!$this->pullBatches($node)){
+				$this->setFailing($node);
 			}
 		}
-		return TRUE;
+		return true;
 	}
 
 	/* enqueue process */
-	public function pullBatches ($node) {
-		if (empty ($this->config["PULL_BATCHES"]) || empty($this->config["NODES"][$node]["BATCHES"])) {
-			return TRUE;
+
+	public function pullBatches($node){
+		if(empty($this->config['PULL_BATCHES']) || empty($this->config['NODES'][$node]['BATCHES'])){
+			return true;
 		}
 
-		$dir = $this->config["BATCHDIR"]."/pull/$node";
+		$dir = $this->config['BATCHDIR'] . '/pull/' . $node;
 		if(!is_dir($dir)){
-			mkdir ($dir, 0777, TRUE);
+			mkdir($dir, 0777, true);
 		}
 
-		$command = $this->config["PULL_BATCHES"];
-		$subst = array ("%s" => $this->config["NODES"][$node]["BATCHES"],
-						"%d" => $dir);
-		if (!$this->executeCommand ($command, $subst)) {
-			syslog(LOG_WARNING, "Pull batches from $node failed, will retry in ".$this->config["FAILTIME"]." seconds");
-			return FALSE;
+		$command = $this->config['PULL_BATCHES'];
+		$subst = [
+			'%s' => $this->config['NODES'][$node]['BATCHES'],
+			'%d' => $dir];
+		if(!$this->executeCommand($command, $subst)){
+			syslog(LOG_WARNING, 'Pull batches from ' . $node . ' failed, will retry in ' . $this->config['FAILTIME'] . ' seconds');
+			return false;
 		}
 
-		if (!empty($this->config["LOG_DEBUG"])) {
-			syslog (LOG_DEBUG, "Pull batches from $node succeeded");
+		if(!empty($this->config['LOG_DEBUG'])){
+			syslog(LOG_DEBUG, 'Pull batches from ' . $node . ' succeeded');
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	/* pull process */
-	public function pullLoop ($ident) {
-		$this->reopenLog ($ident);
+
+	public function pullLoop($ident){
+		$this->reopenLog($ident);
 		$msgtype = $message = $errorcode = '';
-		while (TRUE) {
-			$this->reloadConfig ($ident);
-			try {
-				if (!msg_receive ($this->queue, $this->MSG_PULL, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
-					syslog(LOG_CRIT, "[pull] Cannot pop from queue, putting worker in sleep: ".posix_strerror($errorcode));
-					$this->doSleep($this->config["FAILTIME"]);
+		while(true){
+			$this->reloadConfig($ident);
+			try{
+				if(!msg_receive($this->queue, $this->MSG_PULL, $msgtype, ESTIMATED_BATCH_NAME_LENGTH * $this->config['BULK_MAX_BATCHES'], $message, true, 0, $errorcode)){
+					syslog(LOG_CRIT, '[pull] Cannot pop from queue, putting worker in sleep: ' . posix_strerror($errorcode));
+					$this->doSleep($this->config['FAILTIME']);
 					continue;
 				}
 				list($node, $batches) = $message;
-				$dir = $this->config["BATCHDIR"]."/pull/$node";
+				$dir = $this->config['BATCHDIR'] . '/pull/' . $node;
 				if(!is_dir($dir)){
-					mkdir ($dir, 0777, TRUE);
+					mkdir($dir, 0777, true);
 				}
 
-		if (!$this->syncDataBatch ($node, $batches, "pull")) {
-					msg_send ($this->queue, $this->MSG_RESULT, array($node, "fail"));
+				if(!$this->syncDataBatch($node, $batches, 'pull')){
+					msg_send($this->queue, $this->MSG_RESULT, [$node, 'fail']);
 					continue;
 				}
 
-				if (!empty ($this->config["BACKUPBATCHES"])) {
-					$bakdir = $this->config["BACKUPBATCHES"]."/".strftime("%F")."/pull/$node";
-					while (!is_dir ($bakdir) && !mkdir ($bakdir, 0777, TRUE)) {
-						syslog(LOG_ALERT, "Error creating backup directory $bakdir, cannot continue safely");
-						$this->doSleep($this->config["FAILTIME"]);
-						$this->reloadConfig ($ident);
+				if(!empty($this->config['BACKUPBATCHES'])){
+					$bakdir = $this->config['BACKUPBATCHES'] . '/' . strftime('%F') . '/pull/' . $node;
+					while(!is_dir($bakdir) && !mkdir($bakdir, 0777, true)){
+						syslog(LOG_ALERT, 'Error creating backup directory ' . $bakdir . ', cannot continue safely');
+						$this->doSleep($this->config['FAILTIME']);
+						$this->reloadConfig($ident);
 					}
 
-					foreach ($batches as $batch) {
-						$batchFile = "$dir/$batch";
-						while (!file_exists ("$bakdir/$batch") && !link ($batchFile, "$bakdir/$batch")) {
-							syslog(LOG_ALERT, "Error creating backup link from $batchFile to $bakdir/$batch, cannot continue safely");
-							$this->doSleep($this->config["FAILTIME"]);
-							$this->reloadConfig ($ident);
+					foreach($batches as $batch){
+						$batchFile = $dir . '/' . $batch;
+						while(!file_exists($bakdir . '/' . $batch) && !link($batchFile, $bakdir . '/' . $batch)){
+							syslog(LOG_ALERT, 'Error creating backup link from ' . $batchFile . ' to ' . $bakdir . '/' . $batch . ', cannot continue safely');
+							$this->doSleep($this->config['FAILTIME']);
+							$this->reloadConfig($ident);
 						}
 					}
 					unset($batchFile);
 				}
 
-				if (!$this->config["DRYRUN"]) {
+				if(!$this->config['DRYRUN']){
 					// move successful batches
-					foreach ($batches as $batch) {
-						$batchFile = "$dir/$batch";
-						$destFile = $this->config["BATCHDIR"]."/$batch";
-						if (!rename ($batchFile, $destFile)) {
-							syslog(LOG_CRIT, "Cannot move pulled batch $batchFile into ".$destFile.", the batch will be retried");
-							msg_send ($this->queue, $this->MSG_RESULT, array($node, "fail"));
+					foreach($batches as $batch){
+						$batchFile = $dir . '/' . $batch;
+						$destFile = $this->config['BATCHDIR'] . '/' . $batch;
+						if(!rename($batchFile, $destFile)){
+							syslog(LOG_CRIT, 'Cannot move pulled batch ' . $batchFile . ' into ' . $destFile . ', the batch will be retried');
+							msg_send($this->queue, $this->MSG_RESULT, [$node, 'fail']);
 							continue 2;
 						}
 					}
 					unset($batchFile);
 				}
-				msg_send ($this->queue, $this->MSG_RESULT, array($node, "success"));
-			} catch (Exception $e) {
-				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
-				$this->doSleep($this->config["FAILTIME"]);
+				msg_send($this->queue, $this->MSG_RESULT, [$node, 'success']);
+			} catch (Exception $e){
+				syslog(LOG_CRIT, 'Worker loop: ' . print_r($e, true));
+				$this->doSleep($this->config['FAILTIME']);
 			}
 		}
 	}
 
 	/* push process */
-	public function pushLoop ($ident) {
-		$this->reopenLog ($ident);
+
+	public function pushLoop($ident){
+		$this->reopenLog($ident);
 		$msgtype = $message = $errorcode = '';
-		while (TRUE) {
-			$this->reloadConfig ($ident);
-			try {
-				if (!msg_receive ($this->queue, $this->MSG_PUSH, $msgtype, ESTIMATED_BATCH_NAME_LENGTH*$this->config["BULK_MAX_BATCHES"], $message, true, 0, $errorcode)) {
-					syslog(LOG_CRIT, "[push] Cannot pop from queue, sleeping: ".posix_strerror($errorcode));
-					$this->doSleep($this->config["FAILTIME"]);
+		while(true){
+			$this->reloadConfig($ident);
+			try{
+				if(!msg_receive($this->queue, $this->MSG_PUSH, $msgtype, ESTIMATED_BATCH_NAME_LENGTH * $this->config['BULK_MAX_BATCHES'], $message, true, 0, $errorcode)){
+					syslog(LOG_CRIT, '[push] Cannot pop from queue, sleeping: ' . posix_strerror($errorcode));
+					$this->doSleep($this->config['FAILTIME']);
 					continue;
 				}
 
 				list($node, $batches) = $message;
-				$dir = $this->config["BATCHDIR"]."/push/$node";
+				$dir = $this->config['BATCHDIR'] . '/push/' . $node;
 
 				if(!is_dir($dir)){
-					mkdir ($dir, 0777, TRUE);
+					mkdir($dir, 0777, true);
 				}
-				$res = FALSE;
+				$res = false;
 
-				while (!sem_acquire ($this->sems[$node])) {
-					syslog(LOG_INFO, "Cannot acquire lock for $node, retrying in ".$this->config["SCANTIME"]);
-					$this->doSleep($this->config["FAILTIME"]);
+				while(!sem_acquire($this->sems[$node])){
+					syslog(LOG_INFO, 'Cannot acquire lock for ' . $node . ', retrying in ' . $this->config['SCANTIME']);
+					$this->doSleep($this->config['FAILTIME']);
 				}
 
-				try {
-					if ($this->syncDataBatch ($node, $batches, "push")) {
-						$res = TRUE;
+				try{
+					if($this->syncDataBatch($node, $batches, 'push')){
+						$res = true;
 					}
-				} catch (Exception $e) {
-					syslog(LOG_CRIT, "Error while syncing $node $batches: ".print_r($e));
-					$res = FALSE;
+				} catch (Exception $e){
+					syslog(LOG_CRIT, 'Error while syncing ' . $node . ' ' . $batches . ': ' . print_r($e));
+					$res = false;
 				}
 
-				if (!sem_release ($this->sems[$node])) {
-					syslog(LOG_CRIT, "Could not release lock for $node");
+				if(!sem_release($this->sems[$node])){
+					syslog(LOG_CRIT, 'Could not release lock for ' . $node);
 				}
 
-				if ($res && !$this->config["DRYRUN"]) {
+				if($res && !$this->config['DRYRUN']){
 					// unlink from push dir
-					foreach ($batches as $batch) {
-						$batchFile = "$dir/$batch";
-						if (!unlink ($batchFile)) {
-							syslog(LOG_CRIT, "Could not unlink $batchFile, will be retried");
-							$res = FALSE;
+					foreach($batches as $batch){
+						$batchFile = $dir . '/' . $batch;
+						if(!unlink($batchFile)){
+							syslog(LOG_CRIT, 'Could not unlink ' . $batchFile . ', will be retried');
+							$res = false;
 						}
 					}
 					unset($batchFile);
 				}
 
-				msg_send($this->queue, $this->MSG_RESULT, array($node, ($res ? "success" : "fail")));
-			} catch (Exception $e) {
-				syslog(LOG_CRIT, "Worker loop: ".print_r($e, TRUE));
-				$this->doSleep($this->config["FAILTIME"]);
+				msg_send($this->queue, $this->MSG_RESULT, [$node, ($res ? 'success' : 'fail')]);
+			} catch (Exception $e){
+				syslog(LOG_CRIT, 'Worker loop: ' . print_r($e, true));
+				$this->doSleep($this->config['FAILTIME']);
 			}
 		}
 	}
 
 	/* pull or push process */
-	public function syncDataBatch ($node, $batches, $mode) {
-		if (!empty($this->config["LOG_DEBUG"])) {
-			syslog(LOG_DEBUG, "Process batches ".print_r($batches, true)." for node $node");
+
+	public function syncDataBatch($node, $batches, $mode){
+		if(!empty($this->config['LOG_DEBUG'])){
+			syslog(LOG_DEBUG, 'Process batches ' . print_r($batches, true) . ' for node ' . $node);
 		}
 
-		if (empty ($this->config["NODES"][$node])) {
-			syslog(LOG_CRIT, "Empty configuration for $node, will retry batches ".print_r($batches, true)." in ".$this->config["FAILTIME"]." seconds");
-			return FALSE;
+		if(empty($this->config['NODES'][$node])){
+			syslog(LOG_CRIT, 'Empty configuration for ' . $node . ', will retry batches ' . print_r($batches, true) . ' in ' . $this->config['FAILTIME'] . ' seconds');
+			return false;
 		}
 
 		$batchesType = null;
-		$dir = $this->config["BATCHDIR"]."/$mode/$node";
+		$dir = $this->config['BATCHDIR'] . '/' . $mode . '/' . $node;
 		// verify valid batch filenames
-		$match = array();
-		foreach ($batches as $batch) {
-			$batchFile = "$dir/$batch";
-			if (!preg_match ("/_([^_\.]+)\.batch$/", $batchFile, $match)) {
-				syslog(LOG_ALERT, "Invalid batch filename format $batchFile");
-				return FALSE;
+		$match = [];
+		foreach($batches as $batch){
+			$batchFile = $dir . '/' . $batch;
+			if(!preg_match('/_([^_\.]+)\.batch$/', $batchFile, $match)){
+				syslog(LOG_ALERT, 'Invalid batch filename format ' . $batchFile);
+				return false;
 			}
 			$batchesType = $match[1];
 		}
 
 		$batchFile = null;
 		$input = null;
-		if (count($batches) == 1) {
+		if(count($batches) == 1){
 			$batch = $batches[0];
-			$batchFile = "$dir/$batch";
+			$batchFile = $dir . '/' . $batch;
 		} else {
-			$batchFile = "-";
-			$tmp = array();
+			$batchFile = '-';
+			$tmp = [];
 			// read batch contents
-			foreach ($batches as $batch) {
-				$curBatchFile = "$dir/$batch";
+			foreach($batches as $batch){
+				$curBatchFile = $dir . '/' . $batch;
 				$tmp = array_merge($tmp, explode("\n", trim(file_get_contents($curBatchFile))));
 			}
 			//if this will generate one transaction, we don't need duplicates & the order should not
 			$input = implode("\n", array_unique($tmp)) . "\n";
 		}
 
-		$nodecfg = $this->config["NODES"][$node];
+		$nodecfg = $this->config['NODES'][$node];
 
-		$command = ($batchesType == "rec" ?
-				(empty($nodecfg["SYNC_DATA_REC"]) ? $this->config["SYNC_DATA_REC"] : $nodecfg["SYNC_DATA_REC"]) :
-				(empty($nodecfg["SYNC_DATA_NOREC"]) ? $this->config["SYNC_DATA_NOREC"] : $nodecfg["SYNC_DATA_NOREC"])
+		$command = ($batchesType === 'rec' ?
+				(empty($nodecfg['SYNC_DATA_REC']) ? $this->config['SYNC_DATA_REC'] : $nodecfg['SYNC_DATA_REC']) :
+				(empty($nodecfg['SYNC_DATA_NOREC']) ? $this->config['SYNC_DATA_NOREC'] : $nodecfg['SYNC_DATA_NOREC'])
 			);
 
-		$subst = array ("%b" => $batchFile,
-						"%s" => ($mode == "push") ? $this->config["DATADIR"] : $nodecfg["DATA"],
-						"%d" => ($mode == "push") ? $nodecfg["DATA"] : $this->config["DATADIR"]);
-		if (!$this->executeCommand ($command, $subst, $input)) {
-			syslog(LOG_WARNING, "Batch $mode execution failed, will retry batches ".print_r($batches, true)." in ".$this->config["FAILTIME"]." seconds");
-			return FALSE;
+		$subst = [
+			'%b' => $batchFile,
+			'%s' => ($mode == 'push') ? $this->config['DATADIR'] : $nodecfg['DATA'],
+			'%d' => ($mode == 'push') ? $nodecfg['DATA'] : $this->config['DATADIR']];
+		if(!$this->executeCommand($command, $subst, $input)){
+			syslog(LOG_WARNING, 'Batch ' . $mode . ' execution failed, will retry batches ' . print_r($batches, true) . ' in ' . $this->config['FAILTIME'] . ' seconds');
+			return false;
 		}
 
-		if (!empty($this->config["LOG_DEBUG"])) {
-			syslog (LOG_DEBUG, "Batches $mode ".print_r($batches, true)." succeeded");
+		if(!empty($this->config['LOG_DEBUG'])){
+			syslog(LOG_DEBUG, 'Batches ' . $mode . ' ' . print_r($batches, true) . ' succeeded');
 		}
-		return TRUE;
+		return true;
 	}
 
 	/* node process */
-	function executeCommand ($command, $subst, $input=null) {
-		if (!$this->checkFile ()) {
-			return FALSE;
+
+	function executeCommand($command, $subst, $input = null){
+		if(!$this->checkFile()){
+			return false;
 		}
 
-		foreach ($subst as $k => $v) {
-			$command = str_replace ($k, escapeshellcmd($v), $command);
+		foreach($subst as $k => $v){
+			$command = str_replace($k, escapeshellcmd($v), $command);
 		}
-		if (!empty($this->config["LOG_DEBUG"])) {
-			syslog(LOG_DEBUG, "Executing command $command inputsize:".  ($input?strlen($input):0));
-		}
-
-		if ($this->config["DRYRUN"]) {
-			return TRUE;
+		if(!empty($this->config['LOG_DEBUG'])){
+			syslog(LOG_DEBUG, 'Executing command ' . $command . ' inputsize:' . ($input ? strlen($input) : 0));
 		}
 
-		$desc = array(
-			2 => array('pipe', 'w')
-		);
+		if($this->config['DRYRUN']){
+			return true;
+		}
+
+		$desc = [2 => ['pipe', 'w']
+		];
 
 		//we don't need the output of sync in normal operation mode, just print it in debug mode
-		if(empty($this->config["LOG_DEBUG"])){
-			$desc[1] = array("file", "/dev/null", "w");
+		if(empty($this->config['LOG_DEBUG'])){
+			$desc[1] = ['file', '/dev/null', 'w'];
 		}
 
-		if ($input) {
-			$desc[0] = array('pipe', 'r');
+		if($input){
+			$desc[0] = ['pipe', 'r'];
 		}
 
-		$pipes = array();
+		$pipes = [];
 		// spawn the process
 		$p = proc_open($command, $desc, $pipes);
-		if (!is_resource ($p)) {
-			syslog(LOG_WARNING,"unable to execute ".$command);
-			return FALSE;
+		if(!is_resource($p)){
+			syslog(LOG_WARNING, 'unable to execute ' . $command);
+			return false;
 		}
 		if($input){
 			stream_set_blocking($pipes[0], 0);
@@ -789,7 +806,7 @@ class Sync {
 		while(($status = proc_get_status($p)) && $status['running'] == true){
 			if($tx && $inputPos != $inputLen){
 				$inputPos+=fwrite($pipes[0], substr($input, $inputPos, 8192));
-			} elseif($tx) {
+			} elseif($tx){
 				$tx = false;
 				fclose($pipes[0]);
 			}
@@ -802,7 +819,7 @@ class Sync {
 			}
 		}
 		if(strlen($input) != $inputPos){
-			syslog(LOG_CRIT, 'WARNING LENGTH MISSMATCH ' . strlen($input) . " -> $inputPos ");
+			syslog(LOG_CRIT, 'WARNING LENGTH MISSMATCH ' . strlen($input) . ' -> ' . $inputPos);
 		}
 		foreach($pipes as $pipe){
 			if(is_resource($pipe)){
@@ -810,65 +827,66 @@ class Sync {
 			}
 		}
 
-		if (in_array ($status['exitcode'], $this->config["ACCEPT_STATUS"])) {
-			return TRUE;
+		if(in_array($status['exitcode'], $this->config['ACCEPT_STATUS'])){
+			return true;
 		}
-		syslog(LOG_CRIT, "Command '$command', status ".$status['exitcode'].", inputsize: " . strlen($input) . " stderr: $err");
-		return FALSE;
+		syslog(LOG_CRIT, "Command '$command', status " . $status['exitcode'] . ', inputsize: ' . strlen($input) . ' stderr: ' . $err);
+		return false;
 	}
+
 }
 
-$opts = getopt("c:p:a:u:g:h");
-if ($opts === FALSE) {
+$opts = getopt('c:p:a:u:g:h');
+if($opts === false){
 	exit(1);
 }
 
-if (!empty($opts["h"])) {
+if(!empty($opts['h'])){
 	echo "Usage: {$argv[0]} [ -c config.php ] [ -p sync.pid ] [ -u uid ] [ -g gid ] [ -a start|stop ]\n";
 	exit(0);
 }
 
-$configPath = isset($opts["c"]) ? $opts["c"] : dirname(__FILE__)."/config.php";
+$configPath = isset($opts['c']) ? $opts['c'] : dirname(__FILE__) . '/config.php';
 
-$sync = new Sync ($configPath, !empty($opts["p"]) ? $opts["p"] : null);
+$sync = new Sync($configPath, !empty($opts['p']) ? $opts['p'] : null);
 //have config for UID/GID
 require $configPath;
 
 //direct parameter has precedence over config var
-$gid = intval(empty($opts["g"]) ? (empty($GID) ? 0 : $GID) : $opts["g"]);
+$gid = intval(empty($opts['g']) ? (empty($GID) ? 0 : $GID) : $opts['g']);
 if($gid){
-	if(posix_setgid($gid) === FALSE){
-		syslog(LOG_CRIT, "Could not setgid to $gid");
+	if(posix_setgid($gid) === false){
+		syslog(LOG_CRIT, 'Could not setgid to ' . $gid);
 		exit(1);
 	}
 }
 
 //direct parameter has precedence over config var
-$uid = intval(empty($opts["u"]) ? (empty($UID) ? 0 : $UID) : $opts["u"]);
+$uid = intval(empty($opts['u']) ? (empty($UID) ? 0 : $UID) : $opts['u']);
 if($uid){
-	if(posix_setuid($uid) === FALSE){
-		syslog(LOG_CRIT, "Could not setuid to $uid");
+	if(posix_setuid($uid) === false){
+		syslog(LOG_CRIT, 'Could not setuid to ' . $uid);
 		exit(1);
 	}
 }
 
 $oldpid = 0;
-if (!empty ($opts["p"])) {
-	$pidPath = $opts["p"];
+if(!empty($opts['p'])){
+	$pidPath = $opts['p'];
 	$oldpid = (int) is_readable($pidPath) ? file_get_contents($pidPath) : 0;
 }
 
-if (!empty($opts["a"]) && $opts["a"] == "stop") {
-	if (empty ($opts["p"])) {
-		syslog(LOG_CRIT, "Must specify the pidfile with -p");
+if(!empty($opts['a']) && $opts['a'] == 'stop'){
+	if(empty($opts['p'])){
+		syslog(LOG_CRIT, 'Must specify the pidfile with -p');
 		exit(1);
 	}
 
-	if ($oldpid > 0) {
+	if($oldpid > 0){
 		$pgid = posix_getpgid($oldpid);
-		if ($pgid > 0) {
-			if (posix_kill (-$pgid, SIGTERM) === FALSE) {
-				syslog(LOG_CRIT, "Could not kill $oldpid");
+		if($pgid > 0){
+			if(posix_kill(-$pgid, SIGTERM) === false){
+				syslog(LOG_CRIT, 'Could not kill ' . $oldpid);
 				exit(1);
 			}
 		}
@@ -877,22 +895,22 @@ if (!empty($opts["a"]) && $opts["a"] == "stop") {
 	exit(0);
 }
 
-if (!empty($opts["a"]) && $opts["a"] != "start") {
-	syslog(LOG_CRIT, "Action must be either start or stop");
+if(!empty($opts['a']) && $opts['a'] != 'start'){
+	syslog(LOG_CRIT, 'Action must be either start or stop');
 	exit(1);
 }
 
-if ($oldpid > 0 && file_exists ("/proc/$oldpid")) {
-	syslog(LOG_CRIT, "Process already started: $oldpid");
+if($oldpid > 0 && file_exists('/proc/' . $oldpid)){
+	syslog(LOG_CRIT, 'Process already started: ' . $oldpid);
 	exit(1);
 }
 
-if (!empty($opts["p"])) {
-	$pidPath = $opts["p"];
+if(!empty($opts['p'])){
+	$pidPath = $opts['p'];
 
 	$pidfile = fopen($pidPath, 'c+');
-	if (!$pidfile) {
-		syslog(LOG_CRIT, "Cannot open pid file $pidPath");
+	if(!$pidfile){
+		syslog(LOG_CRIT, 'Cannot open pid file ' . $pidPath);
 		exit(1);
 	}
 
@@ -903,6 +921,6 @@ if (!empty($opts["p"])) {
 	fclose($pidfile);
 }
 
-$sync->run ();
+$sync->run();
 
 exit(0);
