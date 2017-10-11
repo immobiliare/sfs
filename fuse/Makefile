@@ -1,10 +1,10 @@
-CFLAGS=-Wall -DHAVE_UTIMENSAT
-LDFLAGS=-pthread
 ifdef DEBUG
-CFLAGS+=-Werror -fno-inline -ggdb -O0
+CFLAGS:=-Werror -fno-inline -ggdb -O0 $(CFLAGS)
 else
-CFLAGS+=-O2
+CFLAGS:=-O2 $(CFLAGS)
 endif
+CFLAGS+=-Wall -DHAVE_UTIMENSAT
+LDFLAGS+=-pthread
 CSRCS=sfs.c util.c batch.c setproctitle.c config.c inih/ini.c
 CPPSRCS=set.cpp
 COBJS=$(subst .c,.o,$(CSRCS))
