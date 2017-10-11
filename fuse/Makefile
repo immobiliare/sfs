@@ -19,14 +19,14 @@ FUSE_LIBS:=$(shell pkg-config fuse --libs)
 all: sfs
 
 sfs: $(COBJS) $(CPPOBJS)
-	g++ -o sfs $(COBJS) $(CPPOBJS) $(LDFLAGS) $(FUSE_LIBS)
+	$(CXX) -o sfs $(COBJS) $(CPPOBJS) $(LDFLAGS) $(FUSE_LIBS)
 
 %.o: %.c $(HDRS)
-	gcc -c -o $@ $< $(CFLAGS) $(FUSE_FLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(FUSE_FLAGS)
 
 %.o: %.cpp $(HDRS)
 	# Do not use c++11 as standard, it won't build on squeeze
-	g++ -std=c++0x $(CXXFLAGS) -c -o $@ $<
+	$(CXX) -std=c++0x $(CXXFLAGS) -c -o $@ $<
 
 clean:
 	rm -f sfs $(COBJS) $(CPPOBJS)
