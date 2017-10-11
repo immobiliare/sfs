@@ -1,9 +1,12 @@
 ifdef DEBUG
 CFLAGS:=-Werror -fno-inline -ggdb -O0 $(CFLAGS)
+CXXFLAGS:=-Werror -fno-inline -ggdb -O0 $(CXXFLAGS)
 else
 CFLAGS:=-O2 $(CFLAGS)
+CXXFLAGS:=-O2 $(CXXFLAGS)
 endif
 CFLAGS+=-Wall -DHAVE_UTIMENSAT
+CXXFLAGS+=-Wall -DHAVE_UTIMENSAT
 LDFLAGS+=-pthread
 CSRCS=sfs.c util.c batch.c setproctitle.c config.c inih/ini.c
 CPPSRCS=set.cpp
@@ -23,7 +26,7 @@ sfs: $(COBJS) $(CPPOBJS)
 
 %.o: %.cpp $(HDRS)
 	# Do not use c++11 as standard, it won't build on squeeze
-	g++ -std=c++0x $(CFLAGS) -c -o $@ $<
+	g++ -std=c++0x $(CXXFLAGS) -c -o $@ $<
 
 clean:
 	rm -f sfs $(COBJS) $(CPPOBJS)
