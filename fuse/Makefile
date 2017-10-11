@@ -1,7 +1,7 @@
-CFLAGS=-Wall -Werror -DHAVE_UTIMENSAT
+CFLAGS=-Wall -DHAVE_UTIMENSAT
 LDFLAGS=-pthread
 ifdef DEBUG
-CFLAGS+=-fno-inline -ggdb -O0
+CFLAGS+=-Werror -fno-inline -ggdb -O0
 else
 CFLAGS+=-O2
 endif
