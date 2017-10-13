@@ -53,23 +53,23 @@ void initproctitle (int argc, char **argv)
 
 void setproctitle (const char *prog)
 {
-        int i;
-        char buf[SPT_BUFSIZE];
+	int i;
+	char buf[SPT_BUFSIZE];
 
-        if (!argv0)
-                return;
+	if (!argv0)
+		return;
 
 	if (strlen(prog) > SPT_BUFSIZE)
 		return;
 
-		strcpy (buf, prog);
+	strcpy (buf, prog);
 
-        i = strlen(buf);
-        if (i > argv_lth - 2) {
-                i = argv_lth - 2;
-                buf[i] = '\0';
-        }
+	i = strlen(buf);
+	if (i > argv_lth - 2) {
+		i = argv_lth - 2;
+		buf[i] = '\0';
+	}
 	memset(argv0[0], '\0', argv_lth);       /* clear the memory area */
-        strcpy(argv0[0], buf);
-		argv0[1] = NULL;
+	strcpy(argv0[0], buf);
+	argv0[1] = NULL;
 }
