@@ -457,7 +457,7 @@ class Sync {
 		}
 		
 		foreach ($batches as &$batch) {
-			if (!preg_match ("/^[^_]+_([^_]+)_[^.]+\.batch$/", $batch, $match)) {
+			if (!preg_match ("/^\d+_([^_]+)_.*\.batch$/", $batch, $match)) {
 				continue;
 			}
 			$batchNode = $match[1];
