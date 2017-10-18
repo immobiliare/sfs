@@ -917,7 +917,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
-	fd = creat(fpath, mode);
+	fd = open(fpath, fi->flags, mode);
 	END_PERM;
 	if (fd < 0) {
 		retstat = -errno;
