@@ -352,7 +352,7 @@ class Sync {
 				) {
 					# flush bulk
 					if ($mtime === FALSE) {
-						syslog(LOG_WARN, "Cannot get mtime of $batchFile, assuming new bulk");
+						syslog(LOG_WARNING, "Cannot get mtime of $batchFile, assuming new bulk");
 					}
 					if ($bulkCount > 0) {
 						$tasks[$rowno++][] = array($node, $bulk);
