@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # For each rsync operation, check whether the destination
 # filesystem is mounted. Otherwise the operation fails
