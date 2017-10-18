@@ -8,4 +8,4 @@
 
 CHECKFILE="/home/www-data/data/.sfs.mounted"
 
-exec ls -1 "$CHECKFILE"
+exec test -r "$CHECKFILE"
