@@ -261,13 +261,13 @@ pre-xfer exec = '/home/sfs/sfs/php-sync/rsync-check.sh'
     path = /mnt/batches
 ```
 
-Edit `/home/sfs/sfs/php-sync/rsync-check.sh` to use `CHECKFILE="/mnt/data/.sfs.mounted"`. This file is used to check whether the original filesystem is effectively mounted:
+The `/home/sfs/sfs/php-sync/rsync-check.sh` script is used to check whether the filesystems are effectively mounted:
 
 ```
-touch /mnt/data/.sfs.mounted
+touch /mnt/data/.sfs.mounted /mnt/batches/.sfs.mounted
 ```
 
-If the file does not exist, rsync will refuse to transfer any file.
+If these files do not exist, rsync will refuse to transfer any file.
 
 Start rsyncd on each node
 -------------------
