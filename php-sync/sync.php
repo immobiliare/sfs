@@ -359,8 +359,6 @@ class Sync {
 					}
 					$bulk = array();
 					$bulkCount = 0;
-					$lastType = null;
-					break; // we don't send more than one bulk per node, anyway
 				}
 
 				$bulk[] = $batch;
