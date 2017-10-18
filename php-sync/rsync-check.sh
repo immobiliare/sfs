@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # For each rsync operation, check whether the destination
 # filesystem is mounted. Otherwise the operation fails
@@ -6,6 +6,4 @@
 
 # Put in rscynd.conf: pre-xfer exec = '/home/www-data/php-sync/rsync-check.sh'
 
-CHECKFILE="/home/www-data/data/.sfs.mounted"
-
-exec ls -1 "$CHECKFILE"
+exec test -r "${RSYNC_MODULE_PATH}"/.sfs.mounted
