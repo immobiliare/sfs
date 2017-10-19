@@ -352,15 +352,13 @@ class Sync {
 				) {
 					# flush bulk
 					if ($mtime === FALSE) {
-						syslog(LOG_WARN, "Cannot get mtime of $batchFile, assuming new bulk");
+						syslog(LOG_WARNING, "Cannot get mtime of $batchFile, assuming new bulk");
 					}
 					if ($bulkCount > 0) {
 						$tasks[$rowno++][] = array($node, $bulk);
 					}
 					$bulk = array();
 					$bulkCount = 0;
-					$lastType = null;
-					break; // we don't send more than one bulk per node, anyway
 				}
 
 				$bulk[] = $batch;
@@ -457,7 +455,7 @@ class Sync {
 		}
 		
 		foreach ($batches as &$batch) {
-			if (!preg_match ("/^[^_]+_([^_]+)_[^.]+\.batch$/", $batch, $match)) {
+			if (!preg_match ("/^\d+_([^_]+)_.*\.batch$/", $batch, $match)) {
 				continue;
 			}
 			$batchNode = $match[1];

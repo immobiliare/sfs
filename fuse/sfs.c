@@ -253,6 +253,9 @@ int sfs_link(const char *path, const char *newpath) {
 		retstat = -errno;
 	} else {
 		batch_file_event (newpath, "norec");
+		// add old path as event too to ensure that hardlinks are
+		// created on targets when rsync -H is used
+		batch_file_event(path, "norec");
 	}
     
     return retstat;
@@ -914,7 +917,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
-	fd = creat(fpath, mode);
+	fd = open(fpath, fi->flags, mode);
 	END_PERM;
 	if (fd < 0) {
 		retstat = -errno;
