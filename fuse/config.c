@@ -174,8 +174,13 @@ static int config_check (SfsState* state) {
 		goto error;
 	}
 	if (!state->node_name) {
-		syslog(LOG_ERR, "[config] sfs/node_name must be specified");
-		goto error;
+		char hostname[1024];
+		gethostname (hostname, 1000);
+		*(strchrnul(hostname, '.')) = '\0';
+		state->node_name = strndup (hostname, PATH_MAX);
+		syslog(LOG_INFO, "[config] %s is used as node_name", state->node_name);
+		//syslog(LOG_ERR, "[config] sfs/node_name must be specified");
+		//goto error;
 	}
 	if (state->batch_flush_ts.tv_sec <= 0 && state->batch_flush_ts.tv_nsec <= 0) {
 		syslog(LOG_ERR, "[config] sfs/batch_flush_msec must be > 0");

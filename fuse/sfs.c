@@ -1241,7 +1241,7 @@ int main(int argc, char **argv) {
 	state->fuse_umask = umask(0);
 	umask(state->fuse_umask);
 
-	syslog(LOG_INFO, "[main] starting sfs with root=%s, uid=%d, gid=%d, umask=%03o; closing console syslog", state->rootdir, getuid(), getgid(), state->fuse_umask);
+	syslog(LOG_INFO, "[main] starting sfs with root=%s, node_name=%s, uid=%d, gid=%d, umask=%03o; closing console syslog", state->rootdir, state->node_name, getuid(), getgid(), state->fuse_umask);
 	closelog();
 
 	//add general options
