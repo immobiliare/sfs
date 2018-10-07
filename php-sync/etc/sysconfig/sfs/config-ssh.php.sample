@@ -5,7 +5,7 @@
  * if run as root, you may want to preserve group/owner (-go)
  * remove 'q' if you use debug mode, so you can see the real transfer
  */
-$RSYNC_OPTS = '-ltpDcuhROq --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --delete-delay --files-from=%b %s %d';
+$RSYNC_OPTS = '-ltpDcuhROq --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --no-implied-dirs --delete-delay --files-from=%b %s %d';
 //data dir, if this is the same for all nodes
 $DATADIR = '/mnt/data/';
 //batch dir, if this is the same for all nodes
