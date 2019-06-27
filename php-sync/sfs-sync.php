@@ -369,15 +369,13 @@ class Sync{
 				){
 					# flush bulk
 					if($mtime === false){
-						syslog(LOG_WARN, 'Cannot get mtime of ' . $batchFile . ', assuming new bulk');
+						syslog(LOG_WARNING, 'Cannot get mtime of ' . $batchFile . ', assuming new bulk');
 					}
 					if($bulkCount > 0){
 						$tasks[$rowno++][] = [$node, $bulk];
 					}
 					$bulk = [];
 					$bulkCount = 0;
-					$lastType = null;
-					break; // we don't send more than one bulk per node, anyway
 				}
 
 				$bulk[] = $batch;

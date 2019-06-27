@@ -77,7 +77,7 @@ int sfs_getattr(const char *path, struct stat *statbuf) {
     if (retstat < 0) {
 		retstat = -errno;
 	}
-    
+
     return retstat;
 }
 
@@ -107,7 +107,7 @@ int sfs_readlink(const char *path, char *link, size_t size) {
 		link[retstat] = '\0';
 		retstat = 0;
     }
-    
+
     return retstat;
 }
 
@@ -130,7 +130,7 @@ int sfs_mknod(const char *path, mode_t mode, dev_t dev) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -148,7 +148,7 @@ int sfs_mkdir(const char *path, mode_t mode) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -166,7 +166,7 @@ int sfs_unlink(const char *path) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -184,7 +184,7 @@ int sfs_rmdir(const char *path) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -206,7 +206,7 @@ int sfs_symlink(const char *path, const char *link) {
 	} else {
 		batch_file_event (link, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -220,12 +220,12 @@ int sfs_rename(const char *path, const char *newpath) {
     sfs_fullpath(fnewpath, newpath);
 
 	const char* mode = "norec";
-	
+
 	struct stat statbuf;
 	if (lstat(fpath, &statbuf) >= 0 && S_ISDIR (statbuf.st_mode)) {
 		mode = "rec";
 	}
-	
+
 	BEGIN_PERM;
 	retstat = rename(fpath, fnewpath);
 	END_PERM;
@@ -235,7 +235,7 @@ int sfs_rename(const char *path, const char *newpath) {
 		batch_file_event (path, mode);
 		batch_file_event (newpath, mode);
 	}
-    
+
     return retstat;
 }
 
@@ -256,7 +256,7 @@ int sfs_link(const char *path, const char *newpath) {
 		//add old path as event too, this will ensure on target machine with rsync -h the hardlink is created as well
 		batch_file_event(path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -275,7 +275,7 @@ int sfs_chmod(const char *path, mode_t mode) {
 		sfs_update_mtime ("chmod", fpath);
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -294,7 +294,7 @@ int sfs_chown(const char *path, uid_t uid, gid_t gid) {
 		sfs_update_mtime ("chown", fpath);
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -312,7 +312,7 @@ int sfs_truncate(const char *path, off_t newsize) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -340,7 +340,7 @@ int sfs_utime(const char *path, struct utimbuf *ubuf) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -369,7 +369,7 @@ static int sfs_utimens(const char *path, const struct timespec ts[2]) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-	
+
 	return retstat;
 }
 #endif
@@ -402,9 +402,9 @@ int sfs_open(const char *path, struct fuse_file_info *fi) {
 			syslog (LOG_DEBUG, "[open] opened fds %d\n", opened_fds);
 		}
 	}
-    
+
     fi->fh = fd;
-    
+
     return retstat;
 }
 
@@ -421,7 +421,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi) {
 */
 int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     int retstat = 0;
-	
+
 	if (fi->direct_io) {
 		retstat = pread(fi->fh, buf, size, offset);
 		if (retstat < 0) {
@@ -439,7 +439,7 @@ int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
 			retstat += cur;
 		}
 	}
-	
+
 	return retstat;
 }
 
@@ -454,7 +454,7 @@ int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
 int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
 			  struct fuse_file_info *fi) {
     int retstat = 0;
-	
+
 	if (fi->direct_io) {
 		retstat = pwrite (fi->fh, buf, size, offset);
 		if (retstat < 0) {
@@ -472,11 +472,11 @@ int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
 			retstat += cur;
 		}
 	}
-	
+
 	if (retstat > 0) {
 		batch_bytes_written (retstat);
 	}
-    
+
     return retstat;
 }
 
@@ -499,7 +499,7 @@ int sfs_statfs(const char *path, struct statvfs *statv) {
     if (retstat < 0) {
 		retstat = -errno;
 	}
-    
+
     return retstat;
 }
 
@@ -554,14 +554,14 @@ int sfs_release(const char *path, struct fuse_file_info *fi) {
 		if ((fi->flags & O_WRONLY) || (fi->flags & O_RDWR)) {
 			batch_file_event (path, "norec");
 		}
-	
+
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_sub_and_fetch (&state->opened_fds, 1);
 		if (state->log_debug) {
 			syslog (LOG_DEBUG, "[close] opened fds %d\n", opened_fds);
 		}
 	}
-    
+
     return retstat;
 }
 
@@ -574,17 +574,17 @@ int sfs_release(const char *path, struct fuse_file_info *fi) {
 */
 int sfs_fsync(const char *path, int datasync, struct fuse_file_info *fi) {
     int retstat = 0;
-    
+
     if (datasync) {
 		retstat = fdatasync(fi->fh);
 	} else {
 		retstat = fsync(fi->fh);
 	}
-    
+
     if (retstat < 0) {
 		retstat = -errno;
 	}
-    
+
     return retstat;
 }
 
@@ -592,13 +592,13 @@ int sfs_fsync(const char *path, int datasync, struct fuse_file_info *fi) {
 static int sfs_fallocate(const char *path, int mode,
 						 off_t offset, off_t length, struct fuse_file_info *fi) {
 	int retstat = 0;
-	
+
 	(void) path;
 	retstat = fallocate (fi->fh, mode, offset, length);
 	if (retstat < 0) {
 		retstat = -errno;
 	}
-	
+
 	return retstat;
 }
 #elif HAVE_POSIX_FALLOCATE
@@ -626,7 +626,7 @@ int sfs_setxattr(const char *path, const char *name, const char *value, size_t s
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -642,7 +642,7 @@ int sfs_getxattr(const char *path, const char *name, char *value, size_t size) {
     if (retstat < 0) {
 		retstat = -errno;
     }
-	
+
     return retstat;
 }
 
@@ -658,7 +658,7 @@ int sfs_listxattr(const char *path, char *list, size_t size) {
     if (retstat < 0) {
 		retstat = -errno;
 	}
-    
+
     return retstat;
 }
 
@@ -676,7 +676,7 @@ int sfs_removexattr(const char *path, const char *name) {
 	} else {
 		batch_file_event (path, "norec");
 	}
-    
+
     return retstat;
 }
 
@@ -705,9 +705,9 @@ int sfs_opendir(const char *path, struct fuse_file_info *fi) {
 			syslog (LOG_DEBUG, "[opendir] opened fds %d\n", opened_fds);
 		}
 	}
-    
+
     fi->fh = (intptr_t) dp;
-    
+
     return retstat;
 }
 
@@ -739,10 +739,10 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 	struct dirent *de;
 	// once again, no need for fullpath -- but note that I need to cast fi->fh
 	dp = (DIR *) (uintptr_t) fi->fh;
-	
+
 	// reset before doing anything
 	errno = 0;
-	
+
 	// This will copy the entire directory into the buffer.  The loop exits
 	// when either the system readdir() returns NULL, or filler()
 	// returns something non-zero.  The first case just means I've
@@ -757,11 +757,11 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 			return -ENOMEM;
 		}
 	}
-	
+
 	if (de == NULL && errno == EBADF) {
 		retstat = -errno;
 	}
-	
+
 	return retstat;
 }
 
@@ -781,7 +781,7 @@ int sfs_releasedir (const char *path, struct fuse_file_info *fi) {
 			syslog (LOG_DEBUG, "[closedir] opened fds %d\n", opened_fds);
 		}
 	}
-	
+
 	return retstat;
 }
 
@@ -798,20 +798,20 @@ int sfs_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi) {
 	int retstat = 0;
 	DIR *dp;
 	int fd;
-	
+
 	dp = (DIR *) (uintptr_t) fi->fh;
 	fd = dirfd (dp);
-	
+
 	if (datasync) {
 		retstat = fdatasync(fd);
 	} else {
 		retstat = fsync(fd);
 	}
-	
+
 	if (retstat < 0) {
 		retstat = -errno;
 	}
-	
+
 	return retstat;
 }
 
@@ -914,7 +914,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
-	fd = creat(fpath, mode);
+	fd = open(fpath, fi->flags, mode);
 	END_PERM;
 	if (fd < 0) {
 		retstat = -errno;
@@ -925,9 +925,9 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 			syslog (LOG_DEBUG, "[creat] opened fds %d\n", opened_fds);
 		}
 	}
-	
+
 	fi->fh = fd;
-	
+
 	return retstat;
 }
 
@@ -945,13 +945,13 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 */
 int sfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi) {
 	int retstat = 0;
-	
+
 	(void) path;
 	retstat = ftruncate(fi->fh, offset);
 	if (retstat < 0) {
 		retstat = -errno;
 	}
-	
+
 	return retstat;
 }
 
@@ -972,13 +972,13 @@ int sfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi) {
 // the path...
 int sfs_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi) {
 	int retstat = 0;
-	
+
 	(void) path;
 	retstat = fstat(fi->fh, statbuf);
 	if (retstat < 0) {
 		retstat = -errno;
 	}
-	
+
 	return retstat;
 }
 
@@ -1113,12 +1113,12 @@ int main(int argc, char **argv) {
 		perror("[main] state calloc failed");
 		abort();
 	}
-	
+
 	openlog ("sfs-startup", LOG_PID|LOG_CONS|LOG_PERROR, LOG_DAEMON);
-	
+
 	struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
 	fuse_opt_parse (&args, state, sfs_opts, sfs_opt_handler);
-	
+
 	if (!state->rootdir) {
 		sfs_usage();
 	}
@@ -1163,7 +1163,7 @@ int main(int argc, char **argv) {
 
 	// init set proctitle
 	initproctitle (argc, argv);
-	
+
 	// config
 	if (pthread_mutex_init (&(state->config_mutex), NULL) != 0) {
 		syslog(LOG_ERR, "[main] cannot init config mutex: %s", strerror (errno));
@@ -1176,10 +1176,10 @@ int main(int argc, char **argv) {
 	if (!sfs_config_load (state)) {
 		return 5;
 	}
-	
+
 	// startup values
 	sfs_get_monotonic_time (state, &(state->last_time));
-	
+
 	if (pthread_mutex_init (&(state->batch_mutex), NULL) != 0) {
 		syslog(LOG_CRIT, "[main] cannot init batch mutex: %s", strerror (errno));
 		return 7;
@@ -1187,7 +1187,7 @@ int main(int argc, char **argv) {
 
 	state->batch_tmp_file = -1;
 	state->batch_file_set = sfs_set_new ();
-	
+
 	// flush pending batches
 	DIR* dir = opendir (state->batch_tmp_dir);
 	if (!dir) {
@@ -1204,7 +1204,7 @@ int main(int argc, char **argv) {
 				syslog(LOG_ERR, "[main] tmp_path asprintf for %s/%s failed: %s", state->batch_tmp_dir, ent->d_name, strerror (errno));
 				return 9;
 			}
-			
+
 			char* batch_path = NULL;
 			if (asprintf(&batch_path, "%s/%s", state->batch_dir, ent->d_name) < 0) {
 				syslog(LOG_ERR, "[main] batch_path asprintf for %s/%s failed: %s", state->batch_dir, ent->d_name, strerror (errno));
@@ -1243,7 +1243,7 @@ int main(int argc, char **argv) {
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &sfs_oper, state);
 	syslog (LOG_INFO, "[main] fuse_main returned %d\n", fuse_stat);
-	
+
 	closelog();
 	return fuse_stat;
 }
