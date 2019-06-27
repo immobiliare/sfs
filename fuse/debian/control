@@ -2,8 +2,8 @@ Source: sfs-fuse
 Section: admin
 Priority: optional
 Maintainer: Luca Bruno <luca.bruno@immobiliare.it>
-Build-Depends: debhelper (>= 7.0.50~),
-               libfuse-dev (>= 2.8.4),
+Build-Depends: debhelper (>= 7.0),
+               libfuse-dev (>= 2.7.4),
                libc6-dev,
                pkg-config
 Standards-Version: 3.8.4

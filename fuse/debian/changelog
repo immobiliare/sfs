@@ -1,3 +1,9 @@
+sfs-fuse (1.4.1-1) unstable; urgency=low
+
+  * New release.
+
+ -- Luca Bruno <luca.bruno@immobiliare.it>  Mon, 02 May 2016 12:16:23 +0100
+
 sfs-fuse (1.4.0-1) unstable; urgency=low
 
   * Support milliseconds for timeouts, breaks older configurations.

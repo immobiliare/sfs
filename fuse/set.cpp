@@ -39,7 +39,7 @@ SfsSet* sfs_set_new (void) {
 // returns 1 if the element already exists in the set
 int sfs_set_add (SfsSet* set, const char* elem) {
 	pthread_mutex_lock (&(set->mutex));
-	auto it = set->set.find (elem);
+	std::unordered_set<std::string>::iterator it = set->set.find (elem);
 	if (it != set->set.end()) {
 		pthread_mutex_unlock (&(set->mutex));
 		return 1;

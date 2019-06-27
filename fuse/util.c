@@ -97,7 +97,9 @@ int sfs_begin_access (void) {
 	struct fuse_context* ctx = fuse_get_context();
 	if (!state->perm_checks) {
 		// only honor umask
+		#ifdef FUSE_28
 		umask (ctx->umask);
+		#endif
 		return 1;
 	}
 
@@ -127,7 +129,9 @@ int sfs_begin_access (void) {
 		goto error;
 	}
 
+	#ifdef FUSE_28
 	umask (ctx->umask);
+	#endif
 	return 1;
 	
 error:
