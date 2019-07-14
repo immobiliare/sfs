@@ -91,7 +91,7 @@ static int sfs_getattr(const char *path, struct stat *stbuf,
 	res = lstat(fpath, stbuf);
 	}
 	END_PERM;
-	return (res < 0 ? -errno : 0);
+	return (res == -1 ? -errno : 0);
 }
 
 /** Read the target of a symbolic link
@@ -114,7 +114,7 @@ static int sfs_readlink(const char *path, char *buf, size_t size) {
 	BEGIN_PERM;
 	res = readlink(fpath, buf, size - 1);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	buf[res] = '\0';
@@ -128,7 +128,7 @@ static int sfs_readlink(const char *path, char *buf, size_t size) {
 */
 // shouldn't that comment be "if" there is no.... ?
 static int sfs_mknod(const char *path, mode_t mode, dev_t dev) {
-	int res = 0;
+	int res;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 
@@ -138,7 +138,7 @@ static int sfs_mknod(const char *path, mode_t mode, dev_t dev) {
 	else
 		res = mknod(fpath, mode, dev);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -148,14 +148,14 @@ static int sfs_mknod(const char *path, mode_t mode, dev_t dev) {
 
 /** Create a directory */
 static int sfs_mkdir(const char *path, mode_t mode) {
-	int res = 0;
+	int res;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
 	res = mkdir(fpath, mode);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -165,14 +165,14 @@ static int sfs_mkdir(const char *path, mode_t mode) {
 
 /** Remove a file */
 static int sfs_unlink(const char *path) {
-	int res = 0;
+	int res;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
 	res = unlink(fpath);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -181,14 +181,14 @@ static int sfs_unlink(const char *path) {
 
 /** Remove a directory */
 static int sfs_rmdir(const char *path) {
-	int res = 0;
+	int res;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 
 	BEGIN_PERM;
 	res = rmdir(fpath);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -209,7 +209,7 @@ static int sfs_symlink(const char *from, const char *to) {
 	BEGIN_PERM;
 	res = symlink(from, flink);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (to, "norec");
@@ -225,18 +225,19 @@ static int sfs_rename(const char *path, const char *newpath, unsigned int flags)
 	char fnewpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 	sfs_fullpath(fnewpath, newpath);
-
-	const char* mode = "norec";
+	/* When we have renameat2() in libc, then we can implement flags */
+	if (flags)
+		return -EINVAL;
 
 	struct stat statbuf;
-	if (lstat(fpath, &statbuf) >= 0 && S_ISDIR (statbuf.st_mode)) {
-		mode = "rec";
-	}
+	const char* mode = (lstat(fpath, &statbuf) >= 0 && S_ISDIR (statbuf.st_mode)?
+		"rec":
+		"norec");
 
 	BEGIN_PERM;
 	res = rename(fpath, fnewpath);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, mode);
@@ -255,7 +256,7 @@ static int sfs_link(const char *path, const char *newpath) {
 	BEGIN_PERM;
 	res = link(fpath, fnewpath);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (newpath, "norec");
@@ -278,7 +279,7 @@ static int sfs_chmod(const char *path, mode_t mode, struct fuse_file_info *fi) {
 		res = chmod(fpath, mode);
 	}
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	sfs_update_mtime ("chmod", fpath);
@@ -297,10 +298,10 @@ static int sfs_chown(const char *path, uid_t uid, gid_t gid, struct fuse_file_in
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
 	else{
-		res = chown(fpath, uid, gid);
+		res = lchown(fpath, uid, gid);
 	}
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	sfs_update_mtime ("chown", fpath);
@@ -311,7 +312,7 @@ static int sfs_chown(const char *path, uid_t uid, gid_t gid, struct fuse_file_in
 
 /** Change the size of a file */
 static int sfs_truncate(const char *path, off_t size, struct fuse_file_info *fi) {
-	int res = 0;
+	int res;
 
 	BEGIN_PERM;
 	if(fi)
@@ -322,7 +323,7 @@ static int sfs_truncate(const char *path, off_t size, struct fuse_file_info *fi)
 		res = truncate(fpath, size);
 	}
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -348,15 +349,17 @@ static int sfs_utimens(const char *path, const struct timespec ts[2], struct fus
 		}
 	}
 	/* don't use utime/utimes since they follow symlinks */
-	res = utimensat(0, fpath, ts, AT_SYMLINK_NOFOLLOW);
+	if (fi)
+		res = futimens(fi->fh, ts);
+	else
+		res = utimensat(0, fpath, ts, AT_SYMLINK_NOFOLLOW);
 	END_PERM;
-	if (res < 0) {
-		res = -errno;
-	} else {
-		batch_file_event (path, "norec");
+	if (res == -1) {
+		return  -errno;
 	}
+	batch_file_event (path, "norec");
 
-	return res;
+	return 0;
 }
 #endif
 
@@ -371,7 +374,6 @@ static int sfs_utimens(const char *path, const struct timespec ts[2], struct fus
 * Changed in version 2.2
 */
 static int sfs_open(const char *path, struct fuse_file_info *fi) {
-	int res = 0;
 	int fd;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
@@ -379,19 +381,18 @@ static int sfs_open(const char *path, struct fuse_file_info *fi) {
 	BEGIN_PERM;
 	fd = open(fpath, fi->flags);
 	END_PERM;
-	if (fd < 0) {
-		res = -errno;
-	} else {
+	if (fd == -1) {
+		return -errno;
+	}
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
 		if (state->log_debug) {
 			syslog (LOG_DEBUG, "[open] opened fds %d\n", opened_fds);
 		}
-	}
 
 	fi->fh = fd;
 
-	return res;
+	return 0;
 }
 
 /** Read data from an open file
@@ -406,14 +407,14 @@ static int sfs_open(const char *path, struct fuse_file_info *fi) {
 * Changed in version 2.2
 */
 static int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-	int res = 0;
+	int res;
 
-	if (fi->direct_io) {
+	//if (fi->direct_io) {
 		res = pread(fi->fh, buf, size, offset);
-		if (res < 0) {
+		if (res == -1) {
 			res = -errno;
 		}
-	} else {
+	/*} else {
 		while (res < size) {
 			int cur = pread(fi->fh, buf, size-res, offset+res);
 			if (cur <= 0) {
@@ -424,7 +425,7 @@ static int sfs_read(const char *path, char *buf, size_t size, off_t offset, stru
 			}
 			res += cur;
 		}
-	}
+	}*/
 
 	return res;
 }
@@ -459,16 +460,16 @@ static int sfs_read_buf(const char *path, struct fuse_bufvec **bufp,
 *
 * Changed in version 2.2
 */
-static int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
-			  struct fuse_file_info *fi) {
-	int res = 0;
+static int sfs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+	int res;
+	(void) path;
 
-	if (fi->direct_io) {
+	//if (fi->direct_io) {
 		res = pwrite (fi->fh, buf, size, offset);
-		if (res < 0) {
+		if (res == -1) {
 			return -errno;
 		}
-	} else {
+/*	} else {
 		int cur;
 		while (res < size) {
 			cur = pwrite (fi->fh, buf, size-res, offset+res);
@@ -480,7 +481,7 @@ static int sfs_write(const char *path, const char *buf, size_t size, off_t offse
 			}
 			res += cur;
 		}
-	}
+	}*/
 
 	if (res > 0) {
 		batch_bytes_written (res);
@@ -493,14 +494,19 @@ static int sfs_write_buf(const char *path, struct fuse_bufvec *buf,
 		     off_t offset, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec dst = FUSE_BUFVEC_INIT(fuse_buf_size(buf));
-
+	int res;
 	(void) path;
 
 	dst.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	dst.buf[0].fd = fi->fh;
 	dst.buf[0].pos = offset;
 
-	return fuse_buf_copy(&dst, buf, FUSE_BUF_SPLICE_NONBLOCK);
+	res = fuse_buf_copy(&dst, buf, FUSE_BUF_SPLICE_NONBLOCK);
+	if (res > 0) {
+		batch_bytes_written (res);
+	}
+
+	return res;
 }
 
 
@@ -521,7 +527,7 @@ static int sfs_statfs(const char *path, struct statvfs *statv) {
 	res = statvfs(fpath, statv);
 	END_PERM;
 
-	return (res < 0 ? -errno : 0);
+	return (res == -1 ? -errno : 0);
 }
 
 /** Possibly flush cached data
@@ -548,7 +554,8 @@ static int sfs_statfs(const char *path, struct statvfs *statv) {
 * Changed in version 2.2
 */
 static int sfs_flush(const char *path, struct fuse_file_info *fi) {
-	int res = 0;
+	int res;
+	(void) path;
 	/* This is called from every close on an open file, so call the
 	   close on the underlying filesystem.	But since flush may be
 	   called multiple times for an open file, this must not really
@@ -578,12 +585,12 @@ static int sfs_flush(const char *path, struct fuse_file_info *fi) {
 static int sfs_release(const char *path, struct fuse_file_info *fi) {
 	int res;
 	res = close(fi->fh);
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
-		if ((fi->flags & O_WRONLY) || (fi->flags & O_RDWR)) {
-			batch_file_event (path, "norec");
-		}
+	if ((fi->flags & O_WRONLY) || (fi->flags & O_RDWR)) {
+		batch_file_event (path, "norec");
+	}
 
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_sub_and_fetch (&state->opened_fds, 1);
@@ -603,7 +610,7 @@ static int sfs_release(const char *path, struct fuse_file_info *fi) {
 * Changed in version 2.2
 */
 static int sfs_fsync(const char *path, int datasync, struct fuse_file_info *fi) {
-	int res = 0;
+	int res;
 
 	if (datasync) {
 		res = fdatasync(fi->fh);
@@ -611,23 +618,10 @@ static int sfs_fsync(const char *path, int datasync, struct fuse_file_info *fi) 
 		res = fsync(fi->fh);
 	}
 
-	return (res < 0 ? -errno : 0);
+	return (res == -1 ? -errno : 0);
 }
 
-#ifdef HAVE_FALLOCATE
-static int sfs_fallocate(const char *path, int mode,
-						 off_t offset, off_t length, struct fuse_file_info *fi) {
-	int res;
-
-	(void) path;
-	res = fallocate (fi->fh, mode, offset, length);
-	if (res < 0) {
-		res = -errno;
-	}
-
-	return res;
-}
-#elif HAVE_POSIX_FALLOCATE
+#if HAVE_POSIX_FALLOCATE
 static int sfs_fallocate(const char *path, int mode,
 						 off_t offset, off_t length, struct fuse_file_info *fi) {
 	(void) path;
@@ -647,7 +641,7 @@ static int sfs_setxattr(const char *path, const char *name, const char *value, s
 	BEGIN_PERM;
 	res = lsetxattr(fpath, name, value, size, flags);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 		batch_file_event (path, "norec");
@@ -664,7 +658,7 @@ static int sfs_getxattr(const char *path, const char *name, char *value, size_t 
 	BEGIN_PERM;
 	res = lgetxattr(fpath, name, value, size);
 	END_PERM;
-	return (res < 0 ?  -errno : 0);
+	return (res == -1 ?  -errno : 0);
 }
 
 /** List extended attributes */
@@ -676,7 +670,7 @@ static int sfs_listxattr(const char *path, char *list, size_t size) {
 	BEGIN_PERM;
 	res = llistxattr(fpath, list, size);
 	END_PERM;
-	return (res < 0 ? -errno : 0);
+	return (res == -1 ? -errno : 0);
 }
 
 /** Remove extended attributes */
@@ -688,7 +682,7 @@ static int sfs_removexattr(const char *path, const char *name) {
 	BEGIN_PERM;
 	res = lremovexattr(fpath, name);
 	END_PERM;
-	if (res < 0) {
+	if (res == -1) {
 		return -errno;
 	}
 	batch_file_event (path, "norec");
@@ -710,27 +704,34 @@ struct sfs_dirp {
 * Introduced in version 2.3
 */
 static int sfs_opendir(const char *path, struct fuse_file_info *fi) {
-	DIR *dp;
-	int res = 0;
+	int res;
 	char fpath[PATH_MAX];
 	sfs_fullpath(fpath, path);
 
+	struct sfs_dirp *d = malloc(sizeof(struct sfs_dirp));
+	if (d == NULL)
+		return -ENOMEM;
+
 	BEGIN_PERM;
-	dp = opendir(fpath);
+	d->dp = opendir(path);
 	END_PERM;
-	if (dp == NULL) {
+	if (d->dp == NULL) {
 		res = -errno;
-	} else {
-		SfsState* state = SFS_STATE;
-		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
-			syslog (LOG_DEBUG, "[opendir] opened fds %d\n", opened_fds);
-		}
+		free(d);
+		return res;
+	}
+	d->offset = 0;
+	d->entry = NULL;
+
+	fi->fh = (unsigned long) d;
+
+	SfsState* state = SFS_STATE;
+	int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
+	if (state->log_debug) {
+		syslog (LOG_DEBUG, "[opendir] opened fds %d\n", opened_fds);
 	}
 
-	fi->fh = (intptr_t) dp;
-
-	return res;
+	return 0;
 }
 
 static inline struct sfs_dirp *get_dirp(struct fuse_file_info *fi)
@@ -828,8 +829,10 @@ static int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 */
 static int sfs_releasedir (const char *path, struct fuse_file_info *fi) {
 	int res;
-	res = closedir((DIR *) (uintptr_t) fi->fh);
-	if (res < 0) {
+	struct sfs_dirp *d = get_dirp(fi);
+	res = closedir(d->dp);
+	free(d);
+	if (res == -1) {
 		return -errno;
 	}
 	SfsState* state = SFS_STATE;
@@ -924,6 +927,7 @@ static void *sfs_init(struct fuse_conn_info *conn, struct fuse_config *cfg) {
 	return state;
 }
 
+#if 0
 /**
 * Clean up filesystem
 *
@@ -935,6 +939,31 @@ static void sfs_destroy (void *userdata) {
 	/* SfsState* state = (SfsState*) userdata; */
 	// nop, other threads might still be accessing this struct
 }
+#endif
+
+#ifdef HAVE_COPY_FILE_RANGE
+static ssize_t sfs_copy_file_range(const char *path_in,
+				   struct fuse_file_info *fi_in,
+				   off_t off_in, const char *path_out,
+				   struct fuse_file_info *fi_out,
+				   off_t off_out, size_t len, int flags)
+{
+	ssize_t res;
+	(void) path_in;
+	(void) path_out;
+
+	res = copy_file_range(fi_in->fh, &off_in, fi_out->fh, &off_out, len,
+			      flags);
+	if (res == -1)
+		return -errno;
+
+	if (res > 0) {
+		batch_bytes_written (res);
+	}
+
+	return res;
+}
+#endif
 
 /**
 * Check file access permissions
@@ -955,7 +984,7 @@ static int sfs_access(const char *path, int mask) {
 	BEGIN_PERM;
 	res = euidaccess (fpath, mask);
 	END_PERM;
-	return (res < 0 ? -errno : 0);
+	return (res == -1 ? -errno : 0);
 }
 
 /**
@@ -971,7 +1000,6 @@ static int sfs_access(const char *path, int mask) {
 * Introduced in version 2.5
 */
 static int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-	int res = 0;
 	char fpath[PATH_MAX];
 	int fd;
 	sfs_fullpath(fpath, path);
@@ -980,18 +1008,16 @@ static int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	fd = open(fpath, fi->flags, mode);
 	END_PERM;
 	if (fd < 0) {
-		res = -errno;
-	} else {
-		SfsState* state = SFS_STATE;
-		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
-			syslog (LOG_DEBUG, "[creat] opened fds %d\n", opened_fds);
-		}
+		return -errno;
+	}
+	SfsState* state = SFS_STATE;
+	int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
+	if (state->log_debug) {
+		syslog (LOG_DEBUG, "[creat] opened fds %d\n", opened_fds);
 	}
 
 	fi->fh = fd;
-
-	return res;
+	return 0;
 }
 
 static struct fuse_operations sfs_oper = {
@@ -1023,23 +1049,26 @@ static struct fuse_operations sfs_oper = {
 	.releasedir = sfs_releasedir,
 	.fsyncdir = sfs_fsyncdir,
 	.init = sfs_init,
-	.destroy = sfs_destroy,
+	//.destroy = sfs_destroy,
 	.access = sfs_access,
 	.create = sfs_create,
 	.write_buf = sfs_write_buf,
 	.read_buf = sfs_read_buf,
+#ifdef HAVE_POSIX_FALLOCATE
+	.fallocate = sfs_fallocate,
+#endif
 #ifdef HAVE_UTIMENSAT
 	.utimens = sfs_utimens,
 	#endif
+#ifdef HAVE_COPY_FILE_RANGE
+	.copy_file_range = sfs_copy_file_range,
+#endif
 	/* Others
 	.lock - for networking, local by default
 	.flock - for networking, local by default
-	.write_buf - version 2.8
-	.read_buf - version 2.8
 	.poll - version 2.8
 	.ioctl - version 2.8
 	.bmap - for block device
-	.fallocate = sfs_fallocate, version 2.9.1
 	*/
 };
 
@@ -1111,7 +1140,7 @@ static int sfs_opt_handler (void *data, const char *arg, int key, struct fuse_ar
 	return 1;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
 	int fuse_stat;
 	SfsState *state;
 
