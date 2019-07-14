@@ -104,7 +104,7 @@ Starting SFS-FUSE
 We can finally mount the filesystem as sfs user on each node:
 
 ```
-$ sfs -o kernel_cache,use_ino /mnt/data /mnt/fuse
+$ sfs /mnt/data /mnt/fuse
 ```
 
 Test it by writing a file in the FUSE mountpoint, and checking it created a batch in `/mnt/batches/tmp`:
@@ -120,7 +120,7 @@ $ ls /mnt/batches/tmp/
 After 1 second, the batch will be moved into `/mnt/batches`:
 
 ```
-$ cat /mnt/batches/1418212060_node1_node1_1693_00000_norec.batch 
+$ cat /mnt/batches/1418212060_node1_node1_1693_00000_norec.batch
 /test
 ```
 
@@ -172,56 +172,59 @@ In this case the filesystem will be mounted at startup, and the sfs process will
 Sync daemon component
 ===============
 
-Configuring php-sync on the central node
+Prerequisites
+--------------------
+Install commandline version of php, if not already present.
+
+Make sure you have installed php together with these extensions, which might be included in your php-cli installation:
+- sysvmsg
+- sysvsem
+- sysvshm
+
+Check the configuration directive `disable_functions` of `/etc/php.ini` for occurences of
+- proc_open
+- proc_close
+- proc_get_status
+- proc_nice
+- proc_terminate
+- posix_getpid
+- system
+
+
+Installation
 --------------------
 
 In this setup we're going to run the sync daemon only on the central node.
+You can run the sync daemon using rsync over ssh or use the plain rsync transfer in trusted environments.
 
-Write `/home/sfs/sfs/php-sync/config.php`, in the same directory of sync.php:
+If you want to use systemd to start the sync-daemon at system startup, copy the contents of `etc` to your systems etc, by running `cp -R etc/ /etc/`.
+The systemd file assumes you have installed `sfs-sync.php` in `/usr/local/bin`. Copy the to this location, or change the path according to your needs if you want to use systemd to start sfs-sync.
+Our configuration files are located in `etc/sysconfig/sfs/`. We provide two example configs, one for plain rsync, and one usings rsync over ssh.
+
+
+Configuring sfs-sync with plain rsync-transfer on the central node
+--------------------
+
+Use `etc/sysconfig/sfs/config.php.sample` copy it to `www.php` and change only the following lines:
 
 ```
-<?php
-$RSYNC_OPTS = "-ltpDcuhRO --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --delete-delay --files-from=%b %s %d";
-$CONFIG = array(
-"SYNC_DATA_NOREC" => "rsync -d --no-r $RSYNC_OPTS",
-"SYNC_DATA_REC" => "rsync -r $RSYNC_OPTS",
-"PULL_BATCHES" => "rsync -acduhRO --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d",
-"ACCEPT_STATUS" => array(0, 24),
 "NODES" => array(
   "node2" => array("DATA" => "rsync://node2:8173/data/",
                    "BATCHES" => "rsync://node2:8173/batches/"),
   "node3" => array("DATA" => "rsync://node3:8173/data/",
                    "BATCHES" => "rsync://node3:8173/batches/")
 ),
-
-"PUSHPROCS" => 4,
-"PUSHCOUNT" => 10,
-"PULLCOUNT" => 3,
-
-"BULK_OLDER_THAN" => 60,
-"BULK_MAX_BATCHES" => 100,
-
-"DATADIR" => "/mnt/data/",
-"BATCHDIR" => "/mnt/batches",
-"CHECKFILE" => "/mnt/data/.sfs.mounted",
-"SCANTIME" => 1,
-"FAILTIME" => 10,
-"LOG_IDENT" => "sfs-sync(%n)",
-"LOG_OPTIONS" => LOG_PID|LOG_CONS|LOG_PERROR,
-"LOG_FACILITY" => LOG_DAEMON,
-"LOG_DEBUG" => false,
-"DRYRUN" => false
-);
-?>
 ```
 
-Now we can start it:
+IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
+
+Now we can start it via a direct call:
 
 ```
-$ php /home/sfs/sfs/php-sync/sync.php
+$ sfs-sync -c www.php -p /var/run/www.pid
 ```
 
-You will notice an error, that `/mnt/data/.sfs.mounted` does not exist. The php-sync checks periodically for this file: if it does not exist, for safeness the sync is suspended until the file reappears:
+You will notice an error, that `/mnt/data/.sfs.mounted` does not exist. The sfs-sync checks periodically for this file: if it does not exist, for safeness the sync is suspended until the file reappears:
 
 ```
 $ touch /mnt/data/.sfs.mounted
@@ -229,9 +232,10 @@ $ touch /mnt/data/.sfs.mounted
 
 **Note**: the sync daemon works only on the original filesystem, it knows nothing about the FUSE component.
 
-Now you will see another error, the fact that php-sync cannot communicate with the other nodes. It tried to sync the only batch we have in `/mnt/batches` but failed, and will retry periodically. Now we have to setup rsyncd (or sshd) on other nodes to actually transfer files.
+Now you will see another error, the fact that sfs-sync cannot communicate with the other nodes. It tried to sync the only batch we have in `/mnt/batches` but failed, and will retry periodically. Now we have to setup rsyncd on other nodes to actually transfer files.
 
-Configuring rsyncd on other nodes
+
+Configuring rsyncd on other nodes (only for plain rsync transfer!)
 -------------------
 
 Assuming this storage setup is used in an internal network, it's better to use rsyncd behind some firewall rules for better performance. In this setup the rsync daemon will be started on all nodes, except `node1`.
@@ -269,7 +273,7 @@ touch /mnt/data/.sfs.mounted
 
 If the file does not exist, rsync will refuse to transfer any file.
 
-Start rsyncd on each node
+Start rsyncd on each node (only for plain rsync transfer!)
 -------------------
 
 We can start rsyncd on each node, and we're all done:
@@ -281,3 +285,88 @@ $ rsync --daemon --config /home/sfs/rsyncd.conf
 Once `node1` realizes that the other two nodes are reachable, it will synchronize the batch we've written earlier and the file `/mnt/data/test` will be present on all nodes.
 
 Find more about the implementation in the [DETAILS](DETAILS.md) page.
+
+
+Configuring sfs-sync with ssh-rsync-transfer on the central node
+--------------------
+
+Use `etc/sysconfig/sfs/config-ssh.php.sample` copy it to `www.php` and change only the following lines:
+
+```
+        "NODES" => array(
+                "node2" => array("DATA" => 'node2:' . $DATADIR,
+                        "BATCHES" => 'node2:' . $BATCHDIR
+                ),
+                "node3" => array("DATA" => 'node3:' . $DATADIR,
+                        "BATCHES" => 'node3:' . $BATCHDIR
+                ),
+        ),
+```
+
+IMPORTANT: Nodenames in NODES-Array MUST match the names configured in sfs.
+
+Now we can start it via a direct call:
+
+```
+$ sfs-sync -c www.php -p /var/run/www.pid
+```
+
+You will notice an error, that `/mnt/data/.sfs.mounted` does not exist. The sfs-sync checks periodically for this file: if it does not exist, for safeness the sync is suspended until the file reappears:
+
+```
+$ touch /mnt/data/.sfs.mounted
+```
+
+**Note**: the sync daemon works only on the original filesystem, it knows nothing about the FUSE component.
+
+Now you will see another error, the fact that sfs-sync cannot communicate with the other nodes. It tried to sync the only batch we have in `/mnt/batches` but failed, and will retry periodically. Now we have to setup sshd on other nodes to actually transfer files.
+
+
+Configuring ssh for ssh-rsync-transfer
+-------------------
+We assume you know how to configure ssh in principle.
+Since the filetransfer is unable to pipe passwords or passphrases, you have to provide generate a private key and put the key in ~/.ssh directory. For our setup the public key of node1 must be in ~/.ssh/authorized_keys of node2 and node3.
+
+From node1 you should try to do execute
+```
+$ ssh node2
+```
+
+and the same for node3
+```
+$ ssh node3
+```
+
+Both must work in order to use the transfer later on. Keep in mind the key on node1 must be in /root/.ssh directory if you run it by root, or in the user's directory if you drop the rights to a specific user.
+
+After this configuration, no service restart is needed and the transfer should work.
+Since node1 polls quite often, the ssh connection would be genereated quite often. To overcome this, you sould add these lines to `~/.ssh/config`:
+
+```
+Host *
+  ControlMaster auto
+  ControlPersist 10
+  ControlPath ~/.ssh/master-%r@%h:%p
+```
+
+This will prevent ssh to disconnect from the other nodes. The connection is kept for 10 seconds. Change this according to your sfs-sync-configuration.
+
+
+Using systemd to start sfs-sync
+-------------------
+
+Assuming our configuration named `www` is finished, we may not want to start sfs-sync via systemd.
+Copy `etc/systemd/system/sfs-sync@.service` to `/etc/systemd/system/sfs-sync@.service`. This service file is a templated file which expectes the executeable sfs-sync in `/usr/local/bin` and the configurations in `/etc/sysconfig/sfs/`. You can change these defaults by changing the service file. On Debian systems change this to `/etc/defaults/sfs`.
+Copy your configuration file `www.php` to the location stated in the service file (`/etc/sysconfig/sfs/` by default).
+
+In order to start your configuration with systemd, type
+
+```
+$ systemctl start sfs-sync@www
+```
+
+or enable it to start automatically on system-startup
+
+```
+$ systemctl enable sfs-sync@www
+```

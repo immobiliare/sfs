@@ -1,0 +1,12 @@
+[Unit]
+Description=Sync Daemon process for sfs using config "%I"
+After=network.target
+
+[Service]
+Type=simple
+PIDFile=/run/sfs-sync-%i.pid
+ExecStart=/usr/local/bin/sfs-sync.php -c /etc/sysconfig/sfs/%i.php -p /run/sfs-sync-%i.pid
+ExecStop=/usr/local/bin/sfs-sync.php -p /run/sfs-sync/%i.pid -a stop
+
+[Install]
+WantedBy=multi-user.target

@@ -13,7 +13,7 @@ batch_max_bytes=20000000
 batch_flush_msec=1000
 # ignore events having this prefix in the path
 ignore_path_prefix=/.tmp
-# name used for the batch file names
+# name used for the batch file names - optional, if not set (short) hostname is used
 node_name=it1
 # whether to sync batches on every write (recommended but slow)
 use_osync=1

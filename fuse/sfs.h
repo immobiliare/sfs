@@ -22,7 +22,8 @@
 #ifndef SFS_H
 #define SFS_H
 
-#define SFS_VERSION "1.4.1"
+#define SFS_VERSION "1.5.0"
+#define FUSE_USE_VERSION 31
 
 // maintain global sfs state in here
 #include <stdio.h>
@@ -66,11 +67,11 @@ typedef struct {
 	volatile int batch_events;
 	volatile uint64_t batch_bytes;
 	SfsSet* batch_file_set;
-	
+
 	// preserve accross multiple batch creations
 	struct timespec batch_time;
 	int batch_subid;
-	
+
 	// config
 	pthread_mutex_t config_mutex;
 	char* pid_path;
@@ -84,7 +85,7 @@ typedef struct {
 	int use_osync;
 	UpdateMTime update_mtime;
 	int forbid_older_mtime;
-	
+
 	char* log_ident;
 	int log_facility;
 	int log_debug;
