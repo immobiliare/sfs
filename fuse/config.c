@@ -26,13 +26,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <fuse.h>
+#include "sfs.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <syslog.h>
 
-#include "sfs.h"
 #include "inih/ini.h"
 #include "config.h"
 #include "util.h"

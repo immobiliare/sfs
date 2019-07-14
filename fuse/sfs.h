@@ -22,7 +22,8 @@
 #ifndef SFS_H
 #define SFS_H
 
-#define SFS_VERSION "1.4.1"
+#define SFS_VERSION "1.5.0"
+#define FUSE_USE_VERSION 31
 
 // maintain global sfs state in here
 #include <stdio.h>

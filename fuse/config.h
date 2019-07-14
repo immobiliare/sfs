@@ -22,13 +22,11 @@
 #ifndef SFS_CONFIG_H
 #define SFS_CONFIG_H
 
-#include "sfs.h"
-
 /* Returns 1 for success. 0 for error.
  * To be called only at startup.
  */
 int sfs_config_load (SfsState* state);
-	
+
 /* Returns 1 for success, 0 for error, 2 for busy.
  * Not to be called at startup.
  */
