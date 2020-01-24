@@ -42,7 +42,7 @@
  *  whenever I need a path for something I'll call this to construct
  *  it. */
 void sfs_fullpath (char fpath[PATH_MAX], const char *path) {
-	SfsState* data = SFS_STATE;	
+	SfsState* data = SFS_STATE;
     memcpy(fpath, data->rootdir, data->rootdir_len);
     strncpy(&fpath[data->rootdir_len], path, PATH_MAX-data->rootdir_len);
 	fpath[PATH_MAX-1] = '\0';
@@ -50,7 +50,7 @@ void sfs_fullpath (char fpath[PATH_MAX], const char *path) {
 
 int sfs_sync_path (const char *path, int data_only) {
     int fd = open (path, O_RDONLY);
-	
+
     if (fd < 0) {
 		syslog (LOG_CRIT, "[sync_path] cannot open() path %s, this may lead to batch loss: %s", path, strerror (errno));
 		return 0;
@@ -67,7 +67,7 @@ int sfs_sync_path (const char *path, int data_only) {
 			return 0;
 		}
 	}
-	
+
 	close (fd);
     return 1;
 }
@@ -86,14 +86,14 @@ void sfs_get_monotonic_time (SfsState* state, struct timespec *ret) {
 		*ret = state->last_time;
 		return;
 	}
-	
+
 	state->last_time = *ret;
 	return;
 }
 
 int sfs_begin_access (void) {
 	SfsState* state = SFS_STATE;
-	
+
 	struct fuse_context* ctx = fuse_get_context();
 	if (!state->perm_checks) {
 		// only honor umask
@@ -118,13 +118,13 @@ int sfs_begin_access (void) {
 			goto error;
 		}
 	}
-	
-	if (setfsgid (ctx->gid) < 0) {
+
+	if (setegid (ctx->gid) < 0) {
 		syslog(LOG_CRIT, "[access] cannot seteuid to %d: %s", ctx->gid, strerror(errno));
 		goto error;
 	}
 
-	if (setfsuid (ctx->uid) < 0) {
+	if (seteuid (ctx->uid) < 0) {
 		syslog(LOG_CRIT, "[access] cannot seteuid to %d: %s", ctx->uid, strerror(errno));
 		goto error;
 	}
@@ -133,7 +133,7 @@ int sfs_begin_access (void) {
 	umask (ctx->umask);
 	#endif
 	return 1;
-	
+
 error:
 	pthread_mutex_unlock (&(state->access_mutex));
 	return 0;
@@ -146,12 +146,12 @@ void sfs_end_access (void) {
 		umask (state->fuse_umask);
 		return;
 	}
-	
-	if (setfsgid (0) < 0) {
+
+	if (setegid (0) < 0) {
 		syslog(LOG_CRIT, "[access] cannot seteuid back to 0: %s", strerror(errno));
 	}
-		
-	if (setfsuid (0) < 0) {
+
+	if (seteuid (0) < 0) {
 		syslog(LOG_CRIT, "[access] cannot setegid back to 0: %s", strerror(errno));
 	}
 
@@ -189,7 +189,7 @@ int sfs_update_mtime (const char* domain, const char* path) {
 			syslog(LOG_CRIT, "[%s] could not stat %s: %s", domain, path, strerror(errno));
 			return 0;
 		}
-		
+
 		struct timespec ts[2];
 		ts[0].tv_nsec = UTIME_OMIT;
 		ts[1] = statbuf.st_mtim;
@@ -216,12 +216,12 @@ int sfs_timespec_subtract (struct timespec *result, struct timespec *x, struct t
 		y->tv_nsec += 1000000000 * nsec;
 		y->tv_sec -= nsec;
 	}
-	
+
 	/* Compute the time remaining to wait.
 	tv_nsec is certainly positive. */
 	result->tv_sec = x->tv_sec - y->tv_sec;
 	result->tv_nsec = x->tv_nsec - y->tv_nsec;
-	
+
 	/* Return 1 if result is negative. */
 	return x->tv_sec < y->tv_sec;
 }
