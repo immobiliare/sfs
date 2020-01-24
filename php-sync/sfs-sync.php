@@ -21,10 +21,10 @@
  *  along with SFS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-declare(ticks = 1);
+declare(ticks=1);
 
 error_reporting(E_ALL & ~E_STRICT);
-ini_set('display_errors', 1);
+ini_set('display_errors', '1');
 ini_set('error_log', 'syslog');
 
 define('ESTIMATED_BATCH_NAME_LENGTH', 150);
@@ -40,7 +40,37 @@ class Sync{
 	public $MSG_PULL = 2;
 	public $MSG_RESULT = 3;
 
-	public function __construct($configPath, $pidPath){
+	/** @var string */
+	private $configPath = '';
+
+	/** @var string */
+	private $pidPath = '';
+
+	/** @var array<string,int> */
+	private $nodeTimeout = [];
+
+	/** @var bool */
+	private $didShutdown = false;
+
+	/** @var array{NODES:array,BATCHDIR:string,BULK_OLDER_THAN:int,FAILTIME:int,BULK_MAX_BATCHES:int,PULLCOUNT:int,FAILTIME:int} */
+	private $config;
+
+	/** @var int */
+	private $queueKey = 0;
+
+	/** @var array<string,int> */
+	private $semKeys = [];
+
+	/** @var ?resource */
+	private $queue = null;
+
+	/** @var array<string,resource> */
+	private $sems = [];
+
+	/** @var array{push:int,pull:int} */
+	private $nextNodeId = ['push' => 0, 'pull' => 0];
+
+	public function __construct(string $configPath, string $pidPath){
 		$this->configPath = $configPath;
 		$this->pidPath = $pidPath;
 		$this->nodeTimeout = [];
@@ -55,7 +85,7 @@ class Sync{
 	}
 
 	public function shutdown(){
-		if(!empty($this->didShutdown)){
+		if($this->didShutdown){
 			return;
 		}
 		$this->didShutdown = true;
@@ -66,12 +96,11 @@ class Sync{
 		syslog(LOG_NOTICE, 'Shutdown successful');
 	}
 
-	/* all processes */
-
-	public function setConfig($config, $subident = null){
+	/** all processes */
+	public function setConfig(array $config, string $subident = ''): bool{
 		// display messages only in sched process
 		if(empty($config['SYNC_DATA_REC']) || empty($config['SYNC_DATA_NOREC'])){
-			if($subident == 'sched'){
+			if($subident === 'sched'){
 				// display the message only once in the syslog in the parent process
 				syslog(LOG_CRIT, 'Sync data command not configured');
 			}
@@ -79,7 +108,7 @@ class Sync{
 		}
 
 		if(!empty($this->config) && array_keys($this->config['NODES']) != array_keys($config['NODES'])){
-			if($subident == 'sched'){
+			if($subident === 'sched'){
 				// display
 				syslog(LOG_CRIT, 'Nodes cannot change at runtime');
 			}
@@ -87,7 +116,7 @@ class Sync{
 		}
 
 		if(empty($this->config['PULL_BATCHES'])){
-			if($subident == 'sched'){
+			if($subident === 'sched'){
 				// display the message only once in the syslog in the parent process
 				syslog(LOG_WARNING, 'Pull batches command not configured');
 			}
@@ -97,9 +126,8 @@ class Sync{
 		return true;
 	}
 
-	/* all processes */
-
-	public function reopenLog($subident = ''){
+	/** all processes */
+	public function reopenLog(string $subident = ''): void{
 		closelog();
 		$ident = str_replace('%n', $subident, $this->config['LOG_IDENT']);
 		if(version_compare(phpversion(), '5.5.0', '>=')){
@@ -108,9 +136,8 @@ class Sync{
 		openlog($ident, $this->config['LOG_OPTIONS'], $this->config['LOG_FACILITY']);
 	}
 
-	/* all processes */
-
-	public function reloadConfig($subident){
+	/** all processes */
+	public function reloadConfig(string $subident): void{
 		global $CONFIG;
 		$curConfig = $CONFIG;
 		try{
@@ -130,22 +157,20 @@ class Sync{
 		}
 	}
 
-	/* main process */
-
-	public function setupShmKeys(){
+	/** main process */
+	public function setupShmKeys(): void{
 		$tempnam = tempnam('/tmp', 'php-sync');
 		$num = 1;
-		$this->queueKey = ftok($tempnam, $num++);
+		$this->queueKey = ftok($tempnam, (string) $num++);
 		$this->semKeys = [];
 		foreach(array_keys($this->config['NODES']) as $node){
-			$this->semKeys[$node] = ftok($tempnam, $num++);
+			$this->semKeys[$node] = ftok($tempnam, (string) $num++);
 		}
 		unlink($tempnam);
 	}
 
-	/* main process */
-
-	public function setupShm(){
+	/** main process */
+	public function setupShm(): void{
 		$this->queue = msg_get_queue($this->queueKey);
 		if(msg_set_queue($this->queue, ['msg_qbytes' => ESTIMATED_BATCH_NAME_LENGTH * $this->config['BULK_MAX_BATCHES']]) === false){
 			syslog(LOG_CRIT, 'Error adjusting queue message size');
@@ -166,9 +191,8 @@ class Sync{
 		}
 	}
 
-	/* all processes */
-
-	public function checkFile(){
+	/** all processes */
+	public function checkFile(): bool{
 		if(empty($this->config['CHECKFILE'])){
 			syslog(LOG_CRIT, 'No CHECKFILE configured');
 			return false;
@@ -182,17 +206,16 @@ class Sync{
 		return true;
 	}
 
-	/* manage timeout of nodes */
-
-	public function setWaiting($node){
+	/** manage timeout of nodes */
+	public function setWaiting(string $node): void{
 		$this->nodeTimeout[$node] = time() + $this->config['SCANTIME'];
 	}
 
-	public function setFailing($node){
+	public function setFailing(string $node): void{
 		$this->nodeTimeout[$node] = time() + $this->config['FAILTIME'];
 	}
 
-	public function isReady($node){
+	public function isReady(string $node): bool{
 		if(!empty($this->nodeTimeout[$node]) && time() <= $this->nodeTimeout[$node]){
 			return false;
 		}
@@ -200,20 +223,18 @@ class Sync{
 		return true;
 	}
 
-	public function clearTimeout($node){
+	public function clearTimeout(string $node): void{
 		unset($this->nodeTimeout[$node]);
 	}
 
-	/* push and pull procs */
-
-	public function doSleep($time){
+	/** push and pull procs */
+	public function doSleep(int $time): void{
 		$usec = (int) ($time * 1000000);
 		usleep($usec);
 	}
 
-	/* main process */
-
-	public function run(){
+	/** main process */
+	public function run(): void{
 		register_shutdown_function([$this, 'shutdown']);
 
 		if($this->config['DRYRUN']){
@@ -263,9 +284,8 @@ class Sync{
 		$this->schedulerLoop();
 	}
 
-	/* scheduler process */
-
-	public function schedulerLoop(){
+	/** scheduler process */
+	public function schedulerLoop(): void{
 		$this->nextNodeId = ['push' => 0, 'pull' => 0];
 		$this->reopenLog('sched');
 		while(true){
@@ -303,7 +323,7 @@ class Sync{
 		}
 	}
 
-	public function scheduleBatches($mode, $toSchedule){
+	public function scheduleBatches(string $mode, int $toSchedule): int{
 		$curtime = time();
 		$tasks = [];
 		foreach(array_keys($this->config['NODES']) as $node){
@@ -399,7 +419,7 @@ class Sync{
 			 * however we use count($row) for safety */
 			for($i = 0; $i < $rowCnt && $toSchedule > 0; $i++){
 				$nodeId = $this->nextNodeId[$mode] % $rowCnt;
-				$this->nextNodeId[$mode] ++;
+				$this->nextNodeId[$mode]++;
 				if(!empty($row[$nodeId])){
 					$task = $row[$nodeId];
 					if(!in_array($task[0], $scheduledNodes)){
@@ -421,7 +441,7 @@ class Sync{
 		return $toSchedule;
 	}
 
-	public function waitComplete($n){
+	public function waitComplete(int $n): void{
 		$msgtype = $message = $errorcode = '';
 		while($n > 0){
 			if(!msg_receive($this->queue, $this->MSG_RESULT, $msgtype, 4096, $message, true, 0, $errorcode)){
@@ -438,7 +458,7 @@ class Sync{
 
 	/* batch queue loop */
 
-	public function enqueueLoop(){
+	public function enqueueLoop(): void{
 		$this->reopenLog('batchq');
 		while(true){
 			$this->reloadConfig('batchq');
@@ -462,7 +482,7 @@ class Sync{
 
 	/* enqueue process */
 
-	public function linkLocalBatches(){
+	public function linkLocalBatches(): bool{
 		$dir = $this->config['BATCHDIR'];
 		$batches = scandir($dir, 0); // php 5.4: SCANDIR_SORT_ASCENDING
 		if($batches === false){
@@ -524,9 +544,8 @@ class Sync{
 		return true;
 	}
 
-	/* enqueue process */
-
-	public function pullRemoteBatches(){
+	/** enqueue process */
+	public function pullRemoteBatches(): bool{
 		foreach(array_keys($this->config['NODES']) as $node){
 			if(!$this->isReady($node)){
 				continue;
@@ -538,9 +557,8 @@ class Sync{
 		return true;
 	}
 
-	/* enqueue process */
-
-	public function pullBatches($node){
+	/** enqueue process */
+	public function pullBatches(string $node): bool{
 		if(empty($this->config['PULL_BATCHES']) || empty($this->config['NODES'][$node]['BATCHES'])){
 			return true;
 		}
@@ -551,10 +569,10 @@ class Sync{
 		}
 
 		$command = $this->config['PULL_BATCHES'];
-		$subst = [
-			'%s' => $this->config['NODES'][$node]['BATCHES'],
-			'%d' => $dir];
-		if(!$this->executeCommand($command, $subst)){
+		if(!$this->executeCommand($command, [
+				'%s' => $this->config['NODES'][$node]['BATCHES'],
+				'%d' => $dir
+			])){
 			syslog(LOG_WARNING, 'Pull batches from ' . $node . ' failed, will retry in ' . $this->config['FAILTIME'] . ' seconds');
 			return false;
 		}
@@ -566,9 +584,8 @@ class Sync{
 		return true;
 	}
 
-	/* pull process */
-
-	public function pullLoop($ident){
+	/** pull process */
+	public function pullLoop(string $ident): void{
 		$this->reopenLog($ident);
 		$msgtype = $message = $errorcode = '';
 		while(true){
@@ -630,9 +647,8 @@ class Sync{
 		}
 	}
 
-	/* push process */
-
-	public function pushLoop($ident){
+	/** push process */
+	public function pushLoop(string $ident): void{
 		$this->reopenLog($ident);
 		$msgtype = $message = $errorcode = '';
 		while(true){
@@ -662,7 +678,7 @@ class Sync{
 						$res = true;
 					}
 				} catch (Exception $e){
-					syslog(LOG_CRIT, 'Error while syncing ' . $node . ' ' . $batches . ': ' . print_r($e));
+					syslog(LOG_CRIT, 'Error while syncing ' . $node . ' ' . print_r($batches, true) . ': ' . print_r($e, true));
 					$res = false;
 				}
 
@@ -692,7 +708,7 @@ class Sync{
 
 	/* pull or push process */
 
-	public function syncDataBatch($node, $batches, $mode){
+	public function syncDataBatch(string $node, array $batches, string $mode): bool{
 		if(!empty($this->config['LOG_DEBUG'])){
 			syslog(LOG_DEBUG, 'Process batches ' . print_r($batches, true) . ' for node ' . $node);
 		}
@@ -716,7 +732,7 @@ class Sync{
 		}
 
 		$batchFile = null;
-		$input = null;
+		$input = '';
 		if(count($batches) == 1){
 			$batch = $batches[0];
 			$batchFile = $dir . '/' . $batch;
@@ -735,15 +751,15 @@ class Sync{
 		$nodecfg = $this->config['NODES'][$node];
 
 		$command = ($batchesType === 'rec' ?
-				(empty($nodecfg['SYNC_DATA_REC']) ? $this->config['SYNC_DATA_REC'] : $nodecfg['SYNC_DATA_REC']) :
-				(empty($nodecfg['SYNC_DATA_NOREC']) ? $this->config['SYNC_DATA_NOREC'] : $nodecfg['SYNC_DATA_NOREC'])
+			(empty($nodecfg['SYNC_DATA_REC']) ? $this->config['SYNC_DATA_REC'] : $nodecfg['SYNC_DATA_REC']) :
+			(empty($nodecfg['SYNC_DATA_NOREC']) ? $this->config['SYNC_DATA_NOREC'] : $nodecfg['SYNC_DATA_NOREC'])
 			);
 
-		$subst = [
-			'%b' => $batchFile,
-			'%s' => ($mode == 'push') ? $this->config['DATADIR'] : $nodecfg['DATA'],
-			'%d' => ($mode == 'push') ? $nodecfg['DATA'] : $this->config['DATADIR']];
-		if(!$this->executeCommand($command, $subst, $input)){
+		if(!$this->executeCommand($command, [
+				'%b' => $batchFile,
+				'%s' => ($mode == 'push') ? $this->config['DATADIR'] : $nodecfg['DATA'],
+				'%d' => ($mode == 'push') ? $nodecfg['DATA'] : $this->config['DATADIR']
+				], $input)){
 			syslog(LOG_WARNING, 'Batch ' . $mode . ' execution failed, will retry batches ' . print_r($batches, true) . ' in ' . $this->config['FAILTIME'] . ' seconds');
 			return false;
 		}
@@ -756,7 +772,7 @@ class Sync{
 
 	/* node process */
 
-	function executeCommand($command, $subst, $input = null){
+	function executeCommand(string $command, array $subst, string $input = ''): bool{
 		if(!$this->checkFile()){
 			return false;
 		}
@@ -792,9 +808,9 @@ class Sync{
 			return false;
 		}
 		if($input){
-			stream_set_blocking($pipes[0], 0);
+			stream_set_blocking($pipes[0], false);
 		}
-		stream_set_blocking($pipes[2], 0);
+		stream_set_blocking($pipes[2], false);
 
 		$tx = $input ? true : false;
 		$err = '';
@@ -803,7 +819,7 @@ class Sync{
 		$tmp = '';
 		while(($status = proc_get_status($p)) && $status['running'] == true){
 			if($tx && $inputPos != $inputLen){
-				$inputPos+=fwrite($pipes[0], substr($input, $inputPos, 8192));
+				$inputPos += fwrite($pipes[0], substr($input, $inputPos, 8192));
 			} elseif($tx){
 				$tx = false;
 				fclose($pipes[0]);
@@ -813,7 +829,7 @@ class Sync{
 			if(!$inputLen && strlen($tmp) === 0){
 				usleep(10 * 1000);
 			} else {
-				$err.=$tmp;
+				$err .= $tmp;
 			}
 		}
 		if(strlen($input) != $inputPos){
@@ -835,7 +851,7 @@ class Sync{
 }
 
 $opts = getopt('c:p:a:u:g:h');
-if($opts === false){
+if(!is_array($opts)){
 	exit(1);
 }
 
@@ -844,9 +860,9 @@ if(!empty($opts['h'])){
 	exit(0);
 }
 
-$configPath = isset($opts['c']) ? $opts['c'] : dirname(__FILE__) . '/config.php';
+$configPath = $opts['c'] ?? dirname(__FILE__) . '/config.php';
 
-$sync = new Sync($configPath, !empty($opts['p']) ? $opts['p'] : null);
+$sync = new Sync($configPath, $opts['p'] ?? '');
 //have config for UID/GID
 require $configPath;
 
@@ -871,10 +887,10 @@ if($uid){
 $oldpid = 0;
 if(!empty($opts['p'])){
 	$pidPath = $opts['p'];
-	$oldpid = (int) is_readable($pidPath) ? file_get_contents($pidPath) : 0;
+	$oldpid = is_readable($pidPath) ? (int) file_get_contents($pidPath) : 0;
 }
 
-if(!empty($opts['a']) && $opts['a'] == 'stop'){
+if(!empty($opts['a']) && $opts['a'] === 'stop'){
 	if(empty($opts['p'])){
 		syslog(LOG_CRIT, 'Must specify the pidfile with -p');
 		exit(1);
@@ -914,7 +930,7 @@ if(!empty($opts['p'])){
 
 	fseek($pidfile, 0);
 	ftruncate($pidfile, 0);
-	fwrite($pidfile, posix_getpid());
+	fwrite($pidfile, (string) posix_getpid());
 	fflush($pidfile);
 	fclose($pidfile);
 }
