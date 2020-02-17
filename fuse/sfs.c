@@ -398,7 +398,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi) {
 	} else {
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
+		if (state->log_debug&2) {
 			syslog (LOG_DEBUG, "[open] opened fds %d\n", opened_fds);
 		}
 	}
@@ -557,7 +557,7 @@ int sfs_release(const char *path, struct fuse_file_info *fi) {
 
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_sub_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
+		if (state->log_debug&2) {
 			syslog (LOG_DEBUG, "[close] opened fds %d\n", opened_fds);
 		}
 	}
@@ -701,7 +701,7 @@ int sfs_opendir(const char *path, struct fuse_file_info *fi) {
 	} else {
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
+		if (state->log_debug&2) {
 			syslog (LOG_DEBUG, "[opendir] opened fds %d\n", opened_fds);
 		}
 	}
@@ -777,7 +777,7 @@ int sfs_releasedir (const char *path, struct fuse_file_info *fi) {
 	} else {
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_sub_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
+		if (state->log_debug&2) {
 			syslog (LOG_DEBUG, "[closedir] opened fds %d\n", opened_fds);
 		}
 	}
@@ -921,7 +921,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	} else {
 		SfsState* state = SFS_STATE;
 		int opened_fds = __sync_add_and_fetch (&state->opened_fds, 1);
-		if (state->log_debug) {
+		if (state->log_debug&2) {
 			syslog (LOG_DEBUG, "[creat] opened fds %d\n", opened_fds);
 		}
 	}

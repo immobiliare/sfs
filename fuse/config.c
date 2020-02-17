@@ -152,6 +152,10 @@ static int ini_handler (void* userdata, const char* section, const char* name,
 	} else if (MATCH("log", "facility")) {
 		state->log_facility = parse_facility (value);
 	} else if (MATCH("log", "debug")) {
+		/*bit mask
+			0001 batch events
+			0010 low level (fd open/close)
+		*/
 		state->log_debug = atoi (value);
     } else {
 		syslog(LOG_CRIT, "[config] unknown key %s/%s with value '%s'", section, name, value);

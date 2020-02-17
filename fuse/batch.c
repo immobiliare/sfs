@@ -113,7 +113,7 @@ static void batch_flush (SfsState* state) {
 		goto cleanup;
 	}
 
-	if (state->log_debug) {
+	if (state->log_debug&1) {
 		syslog(LOG_DEBUG, "[batch_flush] flushing %s", state->batch_tmp_path);
 	}
 
@@ -127,8 +127,14 @@ static void batch_flush (SfsState* state) {
 		goto cleanup;
 	}
 
+	int retry=0;
+retry:
 	if (rename (state->batch_tmp_path, batch_path) < 0) {
-		syslog(LOG_CRIT, "[batch_flush] rename of %s to %s failed: %s", state->batch_tmp_path, batch_path, strerror (errno));
+		syslog(LOG_CRIT, "[batch_flush] (%d) rename of %s to %s failed: %s", retry, state->batch_tmp_path, batch_path, strerror (errno));
+		if(++retry<3){
+			usleep(1000);
+			goto retry;
+		}
 		goto cleanup;
 	}
 	sfs_sync_path (state->batch_dir, 0);
@@ -145,7 +151,7 @@ cleanup:
 void batch_event (const char* line, int len, const char* type) {
 	SfsState* state = SFS_STATE;
 
-	if (state->log_debug) {
+	if (state->log_debug&1) {
 		syslog (LOG_DEBUG, "[batch_event] batching %s", line);
 	}
 
@@ -191,7 +197,7 @@ void batch_event (const char* line, int len, const char* type) {
 			goto error;
 		}
 
-		if (state->log_debug) {
+		if (state->log_debug&1) {
 			syslog (LOG_DEBUG, "Created batch %s", state->batch_tmp_path);
 		}
 

@@ -22,5 +22,5 @@ use_osync=1
 ident=sfs-fuse
 # can be authpriv, cron, daemon, ftp, kern, local0, local1, local2, local3, local4, local5, local6, local7, lpr, mail, news, syslog, user, uucp
 facility=daemon
-# whether to enable debug messages
+# whether to enable debug messages, bit mask 1=batch events, 10=low level
 debug=0
