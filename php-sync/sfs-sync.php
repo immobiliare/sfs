@@ -860,14 +860,14 @@ if(!empty($opts['h'])){
 	exit(0);
 }
 
-$configPath = $opts['c'] ?? dirname(__FILE__) . '/config.php';
+$configPath = (string) ($opts['c'] ?? dirname(__FILE__) . '/config.php');
 
 $sync = new Sync($configPath, $opts['p'] ?? '');
 //have config for UID/GID
 require $configPath;
 
 //direct parameter has precedence over config var
-$gid = intval(empty($opts['g']) ? (empty($GID) ? 0 : $GID) : $opts['g']);
+$gid = intval($opts['g'] ?? $GID ?? 0);
 if($gid){
 	if(posix_setgid($gid) === false){
 		syslog(LOG_CRIT, 'Could not setgid to ' . $gid);
@@ -876,7 +876,7 @@ if($gid){
 }
 
 //direct parameter has precedence over config var
-$uid = intval(empty($opts['u']) ? (empty($UID) ? 0 : $UID) : $opts['u']);
+$uid = intval($opts['u'] ?? $UID ?? 0);
 if($uid){
 	if(posix_setuid($uid) === false){
 		syslog(LOG_CRIT, 'Could not setuid to ' . $uid);
