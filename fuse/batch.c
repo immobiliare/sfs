@@ -137,6 +137,9 @@ retry:
 		}
 		goto cleanup;
 	}
+	if(retry){
+		syslog(LOG_NOTICE, "[batch_flush] rename success after %d retrys", retry);
+	}
 	sfs_sync_path (state->batch_dir, 0);
 	sfs_sync_path (state->batch_tmp_dir, 0);
 
