@@ -189,7 +189,7 @@ void batch_event (const char* line, int len, const char* type) {
 			goto error;
 		}
 
-		int extra_flags =  O_CREAT | O_WRONLY | (state->use_osync ? O_SYNC : 0);
+		int extra_flags =  O_CREAT | O_WRONLY | O_NOATIME | O_EXCL | O_NONBLOCK | (state->use_osync ? O_SYNC : 0);
 
 		state->batch_tmp_file = open (state->batch_tmp_path, extra_flags, 0666 & (~(state->fuse_umask)));
 		if (state->batch_tmp_file < 0) {
