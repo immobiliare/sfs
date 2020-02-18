@@ -189,12 +189,9 @@ void batch_event (const char* line, int len, const char* type) {
 			goto error;
 		}
 
-		int extra_flags = 0;
-		if (state->use_osync) {
-			extra_flags |= O_SYNC;
-		}
+		int extra_flags =  O_CREAT | O_WRONLY | (state->use_osync ? O_SYNC : 0);
 
-		state->batch_tmp_file = open (state->batch_tmp_path, extra_flags | O_CREAT | O_WRONLY, 0666 & (~(state->fuse_umask)));
+		state->batch_tmp_file = open (state->batch_tmp_path, extra_flags, 0666 & (~(state->fuse_umask)));
 		if (state->batch_tmp_file < 0) {
 			syslog(LOG_CRIT, "[batch_event] cannot open batch %s for writing event %s: %s", state->batch_tmp_path, line, strerror (errno));
 			goto error;
