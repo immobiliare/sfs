@@ -1,0 +1,53 @@
+<?php
+# BUG --xattrs https://bugzilla.samba.org/show_bug.cgi?id=10381
+/*global rsync options used for file transfer
+ * consider adding -H (preserve Hardlinks)
+ * if run as root, you may want to preserve group/owner (-go)
+ * remove 'q' if you use debug mode, so you can see the real transfer
+ */
+$RSYNC_OPTS = '-ltpDcuhROq --exclude /.sfs.conf --exclude /.sfs.mounted --delete-missing-args --no-implied-dirs --delete-delay --files-from=%b %s %d';
+//data dir, if this is the same for all nodes
+$DATADIR = '/mnt/data/';
+//batch dir, if this is the same for all nodes
+$BATCHDIR = '/mnt/batches/';
+//drop privileges to user if different from 0, needs a restart if changed
+$UID = 0;
+//drop privileges to group if different from 0, needs a restart if changed
+$GID = 0;
+//rsync command to use
+$RSYNC = 'rsync';
+
+$CONFIG = array(
+	'SYNC_DATA_NOREC' => $RSYNC . ' -d --no-r ' . $RSYNC_OPTS,
+	'SYNC_DATA_REC' => $RSYNC . ' -r -y ' . $RSYNC_OPTS,
+	'PULL_BATCHES' => $RSYNC . ' -acduhOq --remove-source-files --include='./' --include='*.batch' --exclude='*' %s %d', // comment to disable pull
+	'ACCEPT_STATUS' => array(0, 24), // 24 = Partial transfer due to vanished source files (rsync)
+	'NODES' => array(
+		'destnode1' => array(
+			'DATA' => 'rsync://desthost:destport/destdata/',
+			'BATCHES' => 'rsync://desthost:destport/destbatches/'
+		),
+		'destnode2' => array(
+			'DATA' => 'rsync://desthost:destport/destdata/',
+			'BATCHES' => 'rsync://desthost:destport/destbatches/'
+		),
+	),
+	'PUSHPROCS' => 4, // number of push processes
+	'PUSHCOUNT' => 10, // number of pushed batches in a round
+	'PULLCOUNT' => 3, // number of pulled batches in a round
+// bulk batches older than X seconds, must be higher than the sum of all timeouts
+	'BULK_OLDER_THAN' => 60,
+	'BULK_MAX_BATCHES' => 100,
+// all pulled batches are backuped after execution, uncomment to enable backups
+//'BACKUPBATCHES' => $BATCHDIR.'backup',
+	'DATADIR' => $DATADIR,
+	'BATCHDIR' => $BATCHDIR,
+	'CHECKFILE' => $DATADIR . '.sfs.mounted', // stop syncing if this file does not exist, it is checked periodically
+	'SCANTIME' => 1, // sleep X seconds before scanning for new batches
+	'FAILTIME' => 10, // retry after normal sleep + X seconds instead of $SCANTIME in case of fail
+	'LOG_IDENT' => 'sfs-sync(%n)', // %n is replaced with the name of the subprocess
+	'LOG_OPTIONS' => LOG_PID | LOG_CONS | LOG_PERROR,
+	'LOG_FACILITY' => LOG_DAEMON,
+	'LOG_DEBUG' => false,
+	'DRYRUN' => false // true -> do not sync, batches will not be deleted
+);

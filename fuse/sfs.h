@@ -66,11 +66,11 @@ typedef struct {
 	volatile int batch_events;
 	volatile uint64_t batch_bytes;
 	SfsSet* batch_file_set;
-	
+
 	// preserve accross multiple batch creations
 	struct timespec batch_time;
 	int batch_subid;
-	
+
 	// config
 	pthread_mutex_t config_mutex;
 	char* pid_path;
@@ -84,7 +84,7 @@ typedef struct {
 	int use_osync;
 	UpdateMTime update_mtime;
 	int forbid_older_mtime;
-	
+
 	char* log_ident;
 	int log_facility;
 	int log_debug;

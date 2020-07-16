@@ -152,6 +152,10 @@ static int ini_handler (void* userdata, const char* section, const char* name,
 	} else if (MATCH("log", "facility")) {
 		state->log_facility = parse_facility (value);
 	} else if (MATCH("log", "debug")) {
+		/*bit mask
+			0001 batch events
+			0010 low level (fd open/close)
+		*/
 		state->log_debug = atoi (value);
     } else {
 		syslog(LOG_CRIT, "[config] unknown key %s/%s with value '%s'", section, name, value);
@@ -170,8 +174,13 @@ static int config_check (SfsState* state) {
 		goto error;
 	}
 	if (!state->node_name) {
-		syslog(LOG_ERR, "[config] sfs/node_name must be specified");
-		goto error;
+		char hostname[1024];
+		gethostname (hostname, 1000);
+		*(strchrnul(hostname, '.')) = '\0';
+		state->node_name = strndup (hostname, PATH_MAX);
+		syslog(LOG_INFO, "[config] %s is used as node_name", state->node_name);
+		//syslog(LOG_ERR, "[config] sfs/node_name must be specified");
+		//goto error;
 	}
 	if (state->batch_flush_ts.tv_sec <= 0 && state->batch_flush_ts.tv_nsec <= 0) {
 		syslog(LOG_ERR, "[config] sfs/batch_flush_msec must be > 0");
@@ -205,12 +214,12 @@ error:
 static void config_init (SfsState* state) {
 	state->log_facility = -1;
 	state->update_mtime = UPDATE_MTIME_NO;
-	strcpy (state->hostname, "invalid");
+	strncpy (state->hostname, "invalid", sizeof state->hostname);
 }
 
 int sfs_config_load (SfsState* state) {
 	config_init (state);
-	
+
 	int ret = ini_parse (state->configpath, ini_handler, state);
 	if (ret < 0) {
         syslog(LOG_ERR, "[config] can't load config %s: %s", state->configpath, strerror (errno));
@@ -233,10 +242,10 @@ int sfs_config_reload (void) {
 	SfsState new_state;
 	memset(&new_state, '\0', sizeof(SfsState));
 	config_init (&new_state);
-	
+
 	pthread_mutex_lock (&(state->config_mutex));
 	syslog(LOG_INFO, "Reloading config %s", state->configpath);
-	
+
 	int ret = ini_parse (state->configpath, ini_handler, &new_state);
 	if (ret < 0) {
         syslog(LOG_CRIT, "[config] can't load config %s: %s", state->configpath, strerror (errno));
@@ -281,7 +290,7 @@ int sfs_config_reload (void) {
 	openlog (state->log_ident, LOG_PID, state->log_facility);
     syslog(LOG_NOTICE, "Config reloaded from %s", state->configpath);
 	pthread_mutex_unlock (&(state->config_mutex));
-	
+
 	return 1;
 
 error:
@@ -291,7 +300,7 @@ error:
 	NSFREE(node_name);
 	NSFREE(ignore_path_prefix);
 	NSFREE(log_ident);
-	
+
 	pthread_mutex_unlock (&(state->config_mutex));
 	return 0;
 }

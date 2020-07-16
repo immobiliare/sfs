@@ -56,11 +56,13 @@ void setproctitle (const char *prog)
         int i;
         char buf[SPT_BUFSIZE];
 
-        if (!argv0)
+        if (!argv0){
                 return;
+				}
 
-	if (strlen(prog) > SPT_BUFSIZE)
+	if (strlen(prog) > SPT_BUFSIZE){
 		return;
+	}
 
 		strcpy (buf, prog);
 

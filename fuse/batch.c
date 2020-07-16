@@ -41,7 +41,7 @@ static void batch_flush (SfsState* state);
 
 static void* batch_timer_handler (void* arg) {
 	SfsState* state = (SfsState*) arg;
-	
+
 	while (1) {
 		struct timespec flush_ts = state->batch_flush_ts;
 
@@ -54,7 +54,7 @@ static void* batch_timer_handler (void* arg) {
 				break;
 			}
 		}
-		
+
 		pthread_mutex_lock (&(state->batch_mutex));
 		struct timespec curtime, difftime, dummy;
 		sfs_get_monotonic_time (state, &curtime);
@@ -76,7 +76,7 @@ int batch_start_timer (SfsState* state) {
 		syslog(LOG_CRIT, "[init_thread] cannot start timer thread: %s", strerror (errno));
 		return 0;
 	}
-	
+
 	if (pthread_detach (timer_thread) != 0) {
 		syslog(LOG_CRIT, "[init_thread] cannot detach timer thread: %s", strerror (errno));
 		return 0;
@@ -108,28 +108,37 @@ static void batch_clear (SfsState* state) {
 static void batch_flush (SfsState* state) {
 	const char* batch_dir = state->batch_dir;
 	char* batch_path = NULL;
-	
+
 	if (state->batch_tmp_file < 0) {
 		goto cleanup;
 	}
 
-	if (state->log_debug) {
+	if (state->log_debug&1) {
 		syslog(LOG_DEBUG, "[batch_flush] flushing %s", state->batch_tmp_path);
 	}
-	
+
 	if (close (state->batch_tmp_file) < 0) {
 		syslog(LOG_WARNING, "[batch_flush] error while closing fd %d of tmp batch %s: %s", state->batch_tmp_file, state->batch_tmp_path, strerror (errno));
 	}
 	state->batch_tmp_file = -1;
-	
+
 	if (asprintf(&batch_path, "%s/%s", batch_dir, state->batch_name) < 0) {
 		syslog(LOG_CRIT, "[batch_flush] batch_path asprintf of %s/%s failed: %s", batch_dir, state->batch_name, strerror (errno));
 		goto cleanup;
 	}
 
+	int retry=0;
+retry:
 	if (rename (state->batch_tmp_path, batch_path) < 0) {
-		syslog(LOG_CRIT, "[batch_flush] rename of %s to %s failed: %s", state->batch_tmp_path, batch_path, strerror (errno));
+		syslog(LOG_CRIT, "[batch_flush] (%d) rename of %s to %s failed: %s", retry, state->batch_tmp_path, batch_path, strerror (errno));
+		if(++retry<3){
+			usleep(1000);
+			goto retry;
+		}
 		goto cleanup;
+	}
+	if(retry){
+		syslog(LOG_NOTICE, "[batch_flush] rename success after %d retrys", retry);
 	}
 	sfs_sync_path (state->batch_dir, 0);
 	sfs_sync_path (state->batch_tmp_dir, 0);
@@ -145,7 +154,7 @@ cleanup:
 void batch_event (const char* line, int len, const char* type) {
 	SfsState* state = SFS_STATE;
 
-	if (state->log_debug) {
+	if (state->log_debug&1) {
 		syslog (LOG_DEBUG, "[batch_event] batching %s", line);
 	}
 
@@ -154,11 +163,11 @@ void batch_event (const char* line, int len, const char* type) {
 		batch_flush (state);
 	}
 	state->batch_type = type;
-	
+
 	if (state->batch_tmp_file < 0) {
 		struct timespec curtime;
 		sfs_get_monotonic_time (state, &curtime);
-		
+
 		int subid = state->batch_subid;
 		if (curtime.tv_sec == state->batch_time.tv_sec) {
 			// same second, increment subid
@@ -166,7 +175,7 @@ void batch_event (const char* line, int len, const char* type) {
 		} else {
 			subid = 0;
 		}
-		
+
 		const char* node_name = state->node_name;
 		const char* batch_tmp_dir = state->batch_tmp_dir;
 
@@ -180,18 +189,15 @@ void batch_event (const char* line, int len, const char* type) {
 			goto error;
 		}
 
-		int extra_flags = 0;
-		if (state->use_osync) {
-			extra_flags |= O_SYNC;
-		}
+		int extra_flags =  O_CREAT | O_WRONLY | O_NOATIME | O_EXCL | O_NONBLOCK | (state->use_osync ? O_SYNC : 0);
 
-		state->batch_tmp_file = open (state->batch_tmp_path, extra_flags | O_CREAT | O_WRONLY, 0666 & (~(state->fuse_umask)));
+		state->batch_tmp_file = open (state->batch_tmp_path, extra_flags, 0666 & (~(state->fuse_umask)));
 		if (state->batch_tmp_file < 0) {
 			syslog(LOG_CRIT, "[batch_event] cannot open batch %s for writing event %s: %s", state->batch_tmp_path, line, strerror (errno));
 			goto error;
 		}
-		
-		if (state->log_debug) {
+
+		if (state->log_debug&1) {
 			syslog (LOG_DEBUG, "Created batch %s", state->batch_tmp_path);
 		}
 
@@ -222,7 +228,7 @@ error:
 void batch_file_event (const char* path, const char* type) {
 	SfsState* state = SFS_STATE;
 	const char* ignore_path_prefix = state->ignore_path_prefix;
-	
+
 	if (!strcmp (path, "/.sfs.conf")) {
 		sfs_config_reload ();
 	} else if (!strcmp (path, "/.sfs.mounted")) {
@@ -235,10 +241,14 @@ void batch_file_event (const char* path, const char* type) {
 		if (sfs_set_add (state->batch_file_set, path)) {
 			return;
 		}
-		
-		int len = strlen(path);
+
+		size_t len = strlen(path);
 		char nlpath[len+2];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
 		strncpy (nlpath, path, len);
+#pragma GCC diagnostic pop
 		nlpath[len] = '\n';
 		nlpath[len+1] = '\0';
 		batch_event (nlpath, len+1, type);

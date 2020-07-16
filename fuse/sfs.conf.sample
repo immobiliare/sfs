@@ -13,7 +13,7 @@ batch_max_bytes=20000000
 batch_flush_msec=1000
 # ignore events having this prefix in the path
 ignore_path_prefix=/.tmp
-# name used for the batch file names
+# name used for the batch file names - optional, if not set (short) hostname is used
 node_name=it1
 # whether to sync batches on every write (recommended but slow)
 use_osync=1
@@ -22,5 +22,5 @@ use_osync=1
 ident=sfs-fuse
 # can be authpriv, cron, daemon, ftp, kern, local0, local1, local2, local3, local4, local5, local6, local7, lpr, mail, news, syslog, user, uucp
 facility=daemon
-# whether to enable debug messages
+# whether to enable debug messages, bit mask 1=batch events, 10=low level
 debug=0
