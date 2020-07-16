@@ -130,9 +130,7 @@ class Sync{
 	public function reopenLog(string $subident = ''): void{
 		closelog();
 		$ident = str_replace('%n', $subident, $this->config['LOG_IDENT']);
-		if(version_compare(phpversion(), '5.5.0', '>=')){
-			cli_set_process_title($ident);
-		}
+		cli_set_process_title($ident);
 		openlog($ident, $this->config['LOG_OPTIONS'], $this->config['LOG_FACILITY']);
 	}
 
@@ -604,6 +602,8 @@ class Sync{
 
 				if(!$this->syncDataBatch($node, $batches, 'pull')){
 					msg_send($this->queue, $this->MSG_RESULT, [$node, 'fail']);
+					syslog(LOG_CRIT, '[batch] Cannot sync batches, putting worker to sleep: ' . posix_strerror($errorcode));
+					$this->doSleep($this->config['FAILTIME']);
 					continue;
 				}
 
@@ -813,10 +813,9 @@ class Sync{
 		stream_set_blocking($pipes[2], false);
 
 		$tx = $input ? true : false;
-		$err = '';
+		$tmp = $err = '';
 		$inputLen = $input ? strlen($input) : 0;
 		$inputPos = 0;
-		$tmp = '';
 		while(($status = proc_get_status($p)) && $status['running'] == true){
 			if($tx && $inputPos != $inputLen){
 				$inputPos += fwrite($pipes[0], substr($input, $inputPos, 8192));
@@ -826,8 +825,8 @@ class Sync{
 			}
 			$tmp = fgets($pipes[2], 1024);
 			//wait if nothing read - but only if we don't have data to write
-			if(!$inputLen && strlen($tmp) === 0){
-				usleep(10 * 1000);
+			if($tmp === false || (!$inputLen && strlen($tmp) === 0)){
+				usleep(100 * 1000);
 			} else {
 				$err .= $tmp;
 			}
