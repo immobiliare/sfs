@@ -132,6 +132,7 @@ int sfs_begin_access (void) {
 	#ifdef FUSE_28
 	umask (ctx->umask);
 	#endif
+	pthread_mutex_unlock (&(state->access_mutex));
 	return 1;
 	
 error:
